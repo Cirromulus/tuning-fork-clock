@@ -39,8 +39,7 @@ int main() {
 
     queue_init(&sample_fifo, sizeof(OscCount), fifoSize);
 
-    // todo: Setup interrupt
-    oscCount = 99;
+    oscCount = 0;
 
     // negative timeout means exact delay (rather than delay between callbacks)
     if (!add_repeating_timer_us(freqToPeriodUs(sampleFreq), timer_callback, NULL, &sample_timer))
@@ -55,12 +54,36 @@ int main() {
 
     // TODO:  Drop first sample as it may be the incorrect duration
 
+    // should be an object that tracks it
+    OscCount biggerAverage = 0;
+    size_t inputtedSamples = 0;
+
+    // TODO: Besides this duration averager,
+    // I can imagine a "max resolution" averager that only divides
+    // just before integer overflow
+
     while(true)
     {
         OscCount localCopy = 0;
         queue_remove_blocking(&sample_fifo, &localCopy);
 
         printf("got oscillator count: %llu\n", localCopy);
+
+        biggerAverage += localCopy;
+        inputtedSamples++;
+
+        if (inputtedSamples >= numSamplesForAvg)
+        {
+            // This could be improved integer calculation.
+            const double duration = numSamplesForAvg / sampleFreq;
+            printf("Avg. Frequency over the last %fs: %f (%llu counts)\n",
+                duration,
+                biggerAverage / duration,
+                biggerAverage
+            );
+            biggerAverage = 0;
+            inputtedSamples = 0;
+        }
     }
 
     return 0;
