@@ -1,2 +1,4 @@
 build/
-generated/ws2812.pio.h
+generated/*
+.vscode/
+

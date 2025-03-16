@@ -56,6 +56,7 @@ target_link_libraries(stimmgabeluhr
         hardware_pio
         hardware_dma
         hardware_irq
+        hardware_rtc
         pico_multicore
         )
 
