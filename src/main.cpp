@@ -1,4 +1,5 @@
 #include "config.hpp"
+#include "averager.hpp"
 
 #include <pico/stdlib.h>
 #include <pico/util/queue.h>
@@ -6,7 +7,10 @@
 
 #include <stdio.h>
 #include <cinttypes>   // uhg, oldschool
+#include <array>
 // #include <atomic>    -latomic not found?
+
+
 
 bool timer_callback(repeating_timer_t *rt);
 
@@ -54,13 +58,7 @@ int main() {
 
     // TODO:  Drop first sample as it may be the incorrect duration
 
-    // should be an object that tracks it
-    OscCount biggerAverage = 0;
-    size_t inputtedSamples = 0;
-
-    // TODO: Besides this duration averager,
-    // I can imagine a "max resolution" averager that only divides
-    // just before integer overflow
+    std::array averagers = {Averager{5 / sampleFreq}, Averager{30 / sampleFreq}};
 
     while(true)
     {
@@ -69,20 +67,17 @@ int main() {
 
         printf("got oscillator count: %llu\n", localCopy);
 
-        biggerAverage += localCopy;
-        inputtedSamples++;
-
-        if (inputtedSamples >= numSamplesForAvg)
+        for (Averager<>& averager : averagers)
         {
-            // This could be improved integer calculation.
-            const double duration = numSamplesForAvg / sampleFreq;
-            printf("Avg. Frequency over the last %fs: %f (%llu counts)\n",
-                duration,
-                biggerAverage / duration,
-                biggerAverage
-            );
-            biggerAverage = 0;
-            inputtedSamples = 0;
+            if (averager.feed(localCopy))
+            {
+                // it is ripe (lel)
+                // This could be improved integer calculation.
+                const double duration = averager.getInputtetSamples() / sampleFreq;
+                printf("Avg. Frequency over the last %fs: %f (%llu counts)\n",
+                    duration, averager.getCounts() / duration, averager.getCounts() );
+                averager.reset();
+            }
         }
     }
 
