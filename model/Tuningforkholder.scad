@@ -5,7 +5,7 @@ fork_hals_d = 5.5+.25;
 fork_hals_l = 40;
 fork_hals_sphere = 9;
 magnet = [12+.3,4.6+.3];
-spule = [10.1, 9.5, 14];
+spule = [10.2, 9.5, 14];
 
 screw_d = 3;
 screw_head = [5.5, 0, 3];
@@ -177,7 +177,8 @@ if(show == "all" || show == "base") for(side = [0, 1]) {
 		}
 		translate([fork_l-sp_holder_l-screw_head.x, (fork_abstand+sp_holder_w)/2, conn_h])
 			screw(bite = false);
-		translate([fork_hals_l-screw_head.x, fork_abstand/2, conn_h])
+		magic_offs = [1.5, .5];	// To make it align to the raster of my platine
+		translate([fork_hals_l-screw_head.x+magic_offs.x, fork_abstand/2+magic_offs.y, conn_h])
 			screw(bite = false);
 		main_holder_screws();
 	}
