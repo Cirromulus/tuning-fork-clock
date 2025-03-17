@@ -5,7 +5,7 @@ fork_hals_d = 5.5+.25;
 fork_hals_l = 40;
 fork_hals_sphere = 9;
 magnet = [12+.3,4.6+.3];
-spule = [10, 8.1, 14];
+spule = [10.1, 9.5, 14];
 
 screw_d = 3;
 screw_head = [5.5, 0, 3];
