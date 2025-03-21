@@ -16,18 +16,10 @@ bool timer_callback(repeating_timer_t *rt);
 
 void osc_callback(uint gpio, uint32_t events);
 
-static constexpr int64_t
-freqToPeriodUs(uint64_t frequency)
-{
-    // negative timeout means exact delay (rather than delay between callbacks)
-    return -1000000 / frequency;
-}
-
-
 // --------------
 
 // ugh, globals
-static /*std::atomic<*/OscCount oscCount;
+static OscCount oscCount = 0;
 queue_t sample_fifo;
 
 // Note: This whole timer thing should be replaced by an interrupt
@@ -43,60 +35,29 @@ int main() {
 
     queue_init(&sample_fifo, sizeof(OscCount), fifoSize);
 
-    oscCount = 0;
-
-    // negative timeout means exact delay (rather than delay between callbacks)
-    if (!add_repeating_timer_us(freqToPeriodUs(sampleFreq), timer_callback, NULL, &sample_timer))
-    {
-        printf("Failed to add sampling timer\n");
-        return 1;
-    }
-
     gpio_init(GPIO_WATCH_PIN);
     gpio_set_pulls(GPIO_WATCH_PIN, false, true);    // "Weak" pulldown
     gpio_set_irq_enabled_with_callback(GPIO_WATCH_PIN, GPIO_IRQ_EDGE_RISE, true, &osc_callback);
 
-    // TODO:  Drop first sample as it may be the incorrect duration
-
-    std::array averagers = {Averager{5 / sampleFreq}, Averager{30 / sampleFreq}};
-
+    printf ("Period [us], Frequency [Hz]\n");
     while(true)
     {
-        OscCount localCopy = 0;
-        queue_remove_blocking(&sample_fifo, &localCopy);
+        OscCount oscPeriod = 0;
+        queue_remove_blocking(&sample_fifo, &oscPeriod);
 
-        printf("got oscillator count: %llu\n", localCopy);
-
-        for (Averager<>& averager : averagers)
-        {
-            if (averager.feed(localCopy))
-            {
-                // it is ripe (lel)
-                // This could be improved integer calculation.
-                const double duration = averager.getInputtetSamples() / sampleFreq;
-                printf("Avg. Frequency over the last %fs: %f (%llu counts)\n",
-                    duration, averager.getCounts() / duration, averager.getCounts() );
-                averager.reset();
-            }
-        }
+        printf("%lu,%f\n", oscPeriod, static_cast<double>(1000 * 1000) / oscPeriod);
     }
 
     return 0;
 }
 
-
-bool timer_callback(__unused repeating_timer_t *rt) {
-    if (!queue_try_add(&sample_fifo, &oscCount)) {
-        printf("FIFO was full\n");
-    }
-    oscCount = 0;
-
-    return true; // keep repeating
-}
-
-
 void osc_callback(uint gpio, uint32_t events)
 {
-    // TODO: timer should have a higher Priority as osc_callback :D
-    oscCount++;
+    // static_assert(decltype(declval(time_us_32())) == OscCount);
+    const OscCount now = time_us_32();
+    const OscCount diff = now - oscCount;
+    oscCount = now;
+    if (!queue_try_add(&sample_fifo, &diff)) {
+        printf("FIFO was full\n");
+    };
 }
