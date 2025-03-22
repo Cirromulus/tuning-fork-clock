@@ -1,6 +1,6 @@
 #include "config.hpp"
 // #include "averager.hpp"
-#include "bmp280.hpp"
+#include "bme280.hpp"
 
 #include <pico/stdlib.h>
 #include <pico/util/queue.h>
@@ -33,7 +33,7 @@ repeating_timer_t environment_sample_timer;
 
 i2c_inst_t* setupTempI2c()
 {
-    // BMP280 is on I2C1 GP26/27
+    // BME280 is on I2C1 GP26/27
     static constexpr unsigned sht20_sda = 26;
     static constexpr unsigned sht20_scl = 27;
 
@@ -55,7 +55,14 @@ int main() {
     setup_default_uart();
     stdio_init_all();
 
-    BMP280 bmp{setupTempI2c()};
+    BME280 bmp{setupTempI2c()};
+
+    while (!bmp.init())
+    {
+        printf("Could not init BME280.\n");
+        sleep_ms(1000);
+    }
+
     // negative timeout means exact delay (rather than delay between callbacks)
     if (!add_repeating_timer_ms(2000, timer_callback, NULL, &environment_sample_timer))
     {
