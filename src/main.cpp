@@ -5,6 +5,7 @@
 #include <pico/util/queue.h>
 #include <hardware/i2c.h>
 // #include <pico/multicore.h>
+#include <pico/binary_info.h>   // for picotool help
 
 #include <stdio.h>
 #include <cinttypes>   // uhg, oldschool
@@ -42,6 +43,10 @@ i2c_inst_t* setupTempI2c()
     gpio_set_function(sht20_scl, GPIO_FUNC_I2C);
     gpio_pull_up(sht20_sda);
     gpio_pull_up(sht20_scl);
+
+    // announce to picotool.
+    // Not mandatory, just nice to have.
+    bi_decl(bi_2pins_with_func(sht20_sda, sht20_scl, GPIO_FUNC_I2C));
 
     return i2c1;
 }
