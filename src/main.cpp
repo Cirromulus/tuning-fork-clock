@@ -33,7 +33,7 @@ repeating_timer_t sample_timer;
 
 i2c_inst_t* setupTempI2c()
 {
-    // SHT20 is on I2C1 GP26/27
+    // BMP280 is on I2C1 GP26/27
     static constexpr unsigned sht20_sda = 26;
     static constexpr unsigned sht20_scl = 27;
 
@@ -85,34 +85,19 @@ int main() {
     setup_default_uart();
     stdio_init_all();
 
-    for (int i = 0; i <10; i++)
+    while(true)
     {
-        printf(".");
-        sleep_ms(500);
-        printf("\n");
-    }
+	    i2c_inst_t* temp_i2c = setupTempI2c();
 
-    i2c_inst_t* temp_i2c = setupTempI2c();
-
-    for (int i = 0; i < 5; i++)
-    {
-        uint8_t rxdata;
-        int ret;
-        ret = i2c_read_blocking_until(temp_i2c, 0x40, &rxdata, 1, false, make_timeout_time_us(100000));
-        printf("Maybe temp sensor @ 0x40: %u (status %d)\n", rxdata, ret);
-    }
-
-    for (int i = 0; i < 5; i++)
-    {
-        printf(".");
-        sleep_ms(500);
-        printf("\n");
-    }
-
-    busScan(temp_i2c);
-
-    while (true)
-    {
+	    for (int i = 0; i < 5; i++)
+	    {
+		uint8_t rxdata;
+		int ret;
+		ret = i2c_read_blocking_until(temp_i2c, 0x76, &rxdata, 1, false, make_timeout_time_us(100000));
+		printf("Maybe temp sensor @ 0x40: %u (status %d)\n", rxdata, ret);
+	    }
+	    
+	    busScan(temp_i2c);
     }
 
 
