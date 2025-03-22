@@ -9,7 +9,8 @@
 // Benefit is that it only takes one register read.
 using OscCount = uint32_t;
 
-static constexpr size_t fifoSize = 8;   // one would be also OK, probably
+// should be big enough for allowing I2C measuring traffic
+static constexpr size_t fifoSize = 16;
 
 static constexpr double expectedOscFreq = 440;
 static constexpr double expectedDeviation = expectedOscFreq * .1;

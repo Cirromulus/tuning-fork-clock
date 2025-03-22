@@ -1,5 +1,6 @@
 #include "config.hpp"
-#include "averager.hpp"
+// #include "averager.hpp"
+#include "bmp280.hpp"
 
 #include <pico/stdlib.h>
 #include <pico/util/queue.h>
@@ -22,11 +23,10 @@ void osc_callback(uint gpio, uint32_t events);
 
 // ugh, globals
 static OscCount oscCount = 0;
-queue_t sample_fifo;
+queue_t period_fifo;
 
-// Note: This whole timer thing should be replaced by an interrupt
-// from an external clock of sufficient accuracy
-repeating_timer_t sample_timer;
+static volatile bool shouldSampleEnvironment = false;
+repeating_timer_t environment_sample_timer;
 
 
 // --------------
@@ -51,69 +51,45 @@ i2c_inst_t* setupTempI2c()
     return i2c1;
 }
 
-// #### Copied from example, tmp #####
-
-void busScan(i2c_inst_t* ic2_device)
-{
-    printf("\nI2C Bus Scan\n");
-    printf("   0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F\n");
-
-    for (int addr = 0; addr < (1 << 7); ++addr) {
-        if (addr % 16 == 0) {
-            printf("%02x ", addr);
-        }
-
-        // Perform a 1-byte dummy read from the probe address. If a slave
-        // acknowledges this address, the function returns the number of bytes
-        // transferred. If the address byte is ignored, the function returns
-        // -1.
-
-        // Skip over any reserved addresses.
-        int ret;
-        uint8_t rxdata;
-        ret = i2c_read_blocking_until(ic2_device, addr, &rxdata, 1, false, make_timeout_time_us(500000));
-
-        printf(ret < 0 ? "." : "@");
-        printf(addr % 16 == 15 ? "\n" : "  ");
-    }
-    printf("Done.\n");
-}
-
-// ####                        #####
-
 int main() {
     setup_default_uart();
     stdio_init_all();
 
-    while(true)
+    BMP280 bmp{setupTempI2c()};
+    // negative timeout means exact delay (rather than delay between callbacks)
+    if (!add_repeating_timer_ms(2000, timer_callback, NULL, &environment_sample_timer))
     {
-	    i2c_inst_t* temp_i2c = setupTempI2c();
-
-	    for (int i = 0; i < 5; i++)
-	    {
-		uint8_t rxdata;
-		int ret;
-		ret = i2c_read_blocking_until(temp_i2c, 0x76, &rxdata, 1, false, make_timeout_time_us(100000));
-		printf("Maybe temp sensor @ 0x40: %u (status %d)\n", rxdata, ret);
-	    }
-	    
-	    busScan(temp_i2c);
+        printf("Failed to add enviroment sampling timer\n");
     }
 
 
-    queue_init(&sample_fifo, sizeof(OscCount), fifoSize);
-
+    queue_init(&period_fifo, sizeof(OscCount), fifoSize);
     gpio_init(GPIO_WATCH_PIN);
     gpio_set_pulls(GPIO_WATCH_PIN, false, true);    // "Weak" pulldown
     gpio_set_irq_enabled_with_callback(GPIO_WATCH_PIN, GPIO_IRQ_EDGE_RISE, true, &osc_callback);
 
-    printf ("Period [us], Frequency [Hz]\n");
+    // -- init done --
+
+    printf ("Period [us], Frequency [Hz], Temperature [raw], Pressure [raw]\n");
+    auto lastTemperature = bmp.readTemperatureRaw();
+    auto lastPressure = bmp.readPressureRaw();
     while(true)
     {
         OscCount oscPeriod = 0;
-        queue_remove_blocking(&sample_fifo, &oscPeriod);
+        queue_remove_blocking(&period_fifo, &oscPeriod);
 
-        printf("%lu,%f\n", oscPeriod, static_cast<double>(1000 * 1000) / oscPeriod);
+        if (shouldSampleEnvironment)
+        {
+            lastTemperature = bmp.readTemperatureRaw();
+            lastPressure = bmp.readPressureRaw();
+            shouldSampleEnvironment = false;
+        }
+
+        printf("%lu,%f,%d,%d\n",
+            oscPeriod,
+            static_cast<double>(1000 * 1000) / oscPeriod,
+            lastTemperature.value_or(-1),
+            lastPressure.value_or(-1));
     }
 
     return 0;
@@ -125,7 +101,13 @@ void osc_callback(uint gpio, uint32_t events)
     const OscCount now = time_us_32();
     const OscCount diff = now - oscCount;
     oscCount = now;
-    if (!queue_try_add(&sample_fifo, &diff)) {
+    if (!queue_try_add(&period_fifo, &diff)) {
         printf("FIFO was full\n");
     };
 }
+
+bool timer_callback(__unused repeating_timer_t *rt) {
+    shouldSampleEnvironment = true;
+    return true; // keep repeating
+}
+
