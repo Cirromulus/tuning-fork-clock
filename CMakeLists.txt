@@ -50,13 +50,13 @@ pico_enable_stdio_uart(stimmgabeluhr 0)
 #         OUTPUT_DIR ${CMAKE_CURRENT_LIST_DIR}/generated
 # )
 
-
 # make hardware pio available for interpreting pio file
 target_link_libraries(stimmgabeluhr
         hardware_pio
         hardware_dma
         hardware_irq
         hardware_rtc
+        hardware_i2c
         pico_multicore
         )
 
