@@ -21,10 +21,10 @@ file(GLOB stimmgabeluhr_SRC
         "src/*.cpp"
 )
 
-# file(GLOB stimmgabeluhr_PIOS
-#         "lib/*.pio"
+file(GLOB stimmgabeluhr_PIOS
+        "lib/*.pio"
 #         "src/*.pio"
-# )
+)
 
 add_executable(stimmgabeluhr
         ${stimmgabeluhr_SRC}
@@ -45,10 +45,10 @@ pico_enable_stdio_usb(stimmgabeluhr 1)
 pico_enable_stdio_uart(stimmgabeluhr 0)
 
 # compile pio file
-# pico_generate_pio_header(stimmgabeluhr
-#         ${stimmgabeluhr_PIOS}
-#         OUTPUT_DIR ${CMAKE_CURRENT_LIST_DIR}/generated
-# )
+pico_generate_pio_header(stimmgabeluhr
+        ${stimmgabeluhr_PIOS}
+        OUTPUT_DIR ${CMAKE_CURRENT_LIST_DIR}/generated
+)
 
 target_link_libraries(stimmgabeluhr
         # make hardware pio available for interpreting pio file

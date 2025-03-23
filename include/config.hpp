@@ -14,3 +14,11 @@ static constexpr size_t fifoSize = 16;
 
 static constexpr double expectedOscFreq = 440;
 static constexpr double expectedDeviation = expectedOscFreq * .1;
+
+static constexpr
+OscCount
+toCount(double frequency)
+{
+    // us resolution
+    return (1 / frequency) * (1000 * 1000);
+}

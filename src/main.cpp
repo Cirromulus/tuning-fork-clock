@@ -1,6 +1,7 @@
 #include "config.hpp"
 // #include "averager.hpp"
 #include "bme280.hpp"
+#include "led.hpp"
 
 #include <pico/stdlib.h>
 #include <pico/util/queue.h>
@@ -55,6 +56,9 @@ int main() {
     setup_default_uart();
     stdio_init_all();
 
+    OnboardLED led{16};
+    Status status{led, 0x05};
+
     BME280 bmp{setupTempI2c()};
 
     while (!bmp.init())
@@ -82,8 +86,8 @@ int main() {
     auto lastPressure = bmp.readPressureRaw();
     while(true)
     {
-        OscCount oscPeriod = 0;
-        queue_remove_blocking(&period_fifo, &oscPeriod);
+        OscCount oscCount = 0;
+        queue_remove_blocking(&period_fifo, &oscCount);
 
         if (shouldSampleEnvironment)
         {
@@ -93,10 +97,24 @@ int main() {
         }
 
         printf("%lu,%f,%d,%d\n",
-            oscPeriod,
-            static_cast<double>(1000 * 1000) / oscPeriod,
+            oscCount,
+            static_cast<double>(1000 * 1000) / oscCount,
             lastTemperature.value_or(-1),
             lastPressure.value_or(-1));
+
+        // we only count "up" cycle
+        if (oscCount > toCount(expectedOscFreq - expectedDeviation))
+        {
+            status.tooLowFrequency();
+        }
+        else if (oscCount < toCount(expectedOscFreq + expectedDeviation))
+        {
+            status.tooHighFrequency();
+        }
+        else
+        {
+            status.expectedFrequency();
+        }
     }
 
     return 0;
