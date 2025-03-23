@@ -56,7 +56,11 @@ public:
         return readRegThree(BME280_REGISTER_PRESSUREDATA);
     }
 
-    //...
+    std::optional<uint16_t>
+    readHumidityRaw()
+    {
+        return readReg<uint16_t>(BME280_REGISTER_HUMIDDATA);
+    }
 
     // TODO: Is hugely incorrect currently
     // Returns temperature in DegC, resolution is 0.01 DegC.

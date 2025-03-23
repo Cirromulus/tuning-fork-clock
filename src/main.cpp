@@ -57,7 +57,7 @@ int main() {
     stdio_init_all();
 
     OnboardLED led{16};
-    Status status{led, 0x05};
+    Status status{led, 0x03};
 
     BME280 bmp{setupTempI2c()};
 
@@ -81,9 +81,10 @@ int main() {
 
     // -- init done --
 
-    printf ("Period [us], Frequency [Hz], Temperature [raw], Pressure [raw]\n");
+    printf ("Period [us], Frequency [Hz], Temperature [raw], Pressure [raw], Humidity [raw]\n");
     auto lastTemperature = bmp.readTemperature();
     auto lastPressure = bmp.readPressureRaw();
+    auto lastHumidity = bmp.readHumidityRaw();
     while(true)
     {
         OscCount oscCount = 0;
@@ -93,14 +94,16 @@ int main() {
         {
             lastTemperature = bmp.readTemperatureRaw();
             lastPressure = bmp.readPressureRaw();
+            lastHumidity = bmp.readHumidityRaw();
             shouldSampleEnvironment = false;
         }
 
-        printf("%lu,%f,%d,%d\n",
+        printf("%lu,%f,%d,%d,%d\n",
             oscCount,
             static_cast<double>(1000 * 1000) / oscCount,
             lastTemperature.value_or(-1),
-            lastPressure.value_or(-1));
+            lastPressure.value_or(-1),
+            lastHumidity.value_or(-1));
 
         // we only count "up" cycle
         if (oscCount > toCount(expectedOscFreq - expectedDeviation))
