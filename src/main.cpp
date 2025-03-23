@@ -78,7 +78,7 @@ int main() {
     // -- init done --
 
     printf ("Period [us], Frequency [Hz], Temperature [raw], Pressure [raw]\n");
-    auto lastTemperature = bmp.readTemperatureRaw();
+    auto lastTemperature = bmp.readTemperature();
     auto lastPressure = bmp.readPressureRaw();
     while(true)
     {
