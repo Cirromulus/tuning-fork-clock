@@ -62,14 +62,13 @@ int main() {
     BME280 bme{setupTempI2c()};
 
     // this will block forever
-    bmeTest(bme);
+    // bmeTest(bme);
 
     while (!bme.init())
     {
         printf("Could not init BME280.\n");
         sleep_ms(1000);
     }
-
 
     // negative timeout means exact delay (rather than delay between callbacks)
     if (!add_repeating_timer_ms(2000, timer_callback, NULL, &environment_sample_timer))
@@ -85,11 +84,9 @@ int main() {
 
     // -- init done --
 
-    printf ("Period [us], Frequency [Hz], Temperature [raw], Pressure [raw], Humidity [raw]\n");
-    auto lastTemperature = bme.readTemperature();
-    auto lastPressure = bme.readPressureRaw();
-    auto lastHumidity = bme.readHumidityRaw();
-    auto lastValidSampleTime = get_absolute_time();
+    printf ("Period [us], Frequency [Hz], Temperature [0.01 DegC], Pressure [2^(-8) Pa], Humidity [2^(-10) %RH]\n");
+    auto lastEnvironmentSample = bme.readEnvironment();
+    auto lastValidOscSampleTime = get_absolute_time();
 
     // is here because of no signal not working on the first occurrence dunno
     status.noSignal();
@@ -98,7 +95,7 @@ int main() {
         OscCount oscCount = 0;
         if (!queue_try_remove(&period_fifo, &oscCount))
         {
-            const auto diff = absolute_time_diff_us(lastValidSampleTime, get_absolute_time());
+            const auto diff = absolute_time_diff_us(lastValidOscSampleTime, get_absolute_time());
             if (diff > expectedMaxCount)
             {
                 // ugly enough, without the printf, it will not set the led
@@ -111,14 +108,12 @@ int main() {
         }
         else
         {
-            lastValidSampleTime = get_absolute_time();
+            lastValidOscSampleTime = get_absolute_time();
         }
 
         if (shouldSampleEnvironment)
         {
-            lastTemperature = bme.readTemperatureRaw();
-            lastPressure = bme.readPressureRaw();
-            lastHumidity = bme.readHumidityRaw();
+            lastEnvironmentSample = bme.readEnvironment();
             shouldSampleEnvironment = false;
         }
 
@@ -134,13 +129,22 @@ int main() {
         {
             status.expectedFrequency();
 
+            const auto env = lastEnvironmentSample.value_or(BME280::EnvironmentMeasurement{0,0,0});
+
             // we effectively skip unexpected samples
-            printf("%lu,%f,%d,%d,%d\n",
+            printf("%lu,%f",
                 oscCount,
-                static_cast<double>(1000 * 1000) / oscCount,
-                lastTemperature.value_or(-1),
-                lastPressure.value_or(-1),
-                lastHumidity.value_or(-1));
+                static_cast<double>(1000 * 1000) / oscCount);
+
+            printf(",%ld,%lu,%lu",
+                env.temperature_centidegree,
+                env.pressure_q23_8,
+                env.humidity_q22_10);
+
+            printf(",%ld,%lu,%lu\n",
+                    env.getTemperatureDegree(),
+                    env.getPressurePa(),
+                    env.getHumidityPercentRH());
         }
     }
 

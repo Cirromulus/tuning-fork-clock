@@ -22,8 +22,34 @@ class BME280
     static constexpr size_t timeout_ms = 100;
 
 public:
+    struct EnvironmentMeasurement
+    {
+        int32_t temperature_centidegree;    // * .01 Celsius
+        uint32_t pressure_q23_8;            // * 2^(-8)
+        uint32_t humidity_q22_10;           // * 2^(-10)
+
+        constexpr
+        int32_t getTemperatureDegree() const
+        {
+            return temperature_centidegree * 0.01;
+        }
+
+        constexpr
+        uint32_t getPressurePa() const
+        {
+            return pressure_q23_8 >> 8;
+        }
+
+        constexpr
+        uint32_t getHumidityPercentRH() const
+        {
+            return humidity_q22_10 >> 10;
+        }
+
+    };
+
     constexpr BME280(i2c_inst_t* i2c)
-    : m_i2c{i2c}
+    : m_i2c{i2c}, m_tempFineCoefficient{0}
     {
     }
 
@@ -67,7 +93,40 @@ public:
     std::optional<int32_t>
     readTemperature()
     {
-        return readTemperatureRaw().and_then(filterDefaultRegisterValue).transform([this](auto reg){ return calibratedTemperature(reg);});
+        return readTemperatureRaw().and_then(filterDefaultRegisterValue<>).transform([this](auto reg){ return calibratedTemperature(reg);});
+    }
+
+    // Returns pressure in Pa as unsigned 32 bit integer in Q24.8 format
+    // (24 integer bits and 8 fractional bits).
+    // Output value of “24674867” represents 24674867/256 = 96386.2 Pa = 963.862 hPa
+    std::optional<uint32_t>
+    readPressure()
+    {
+        // you should have read Temperature as well, hm
+        return readPressureRaw().and_then(filterDefaultRegisterValue<>).transform([this](auto reg){ return calibratedPressure(reg);});
+    }
+
+    // Returns humidity in %RH as unsigned 32 bit integer in Q22.10 format
+    // (22 integer and 10 fractional bits).
+    // Output value of “47445” represents 47445/1024 = 46.333 %RH
+    std::optional<uint32_t>
+    readHumidity()
+    {
+        // you should have read Temperature as well, hm
+        return readHumidityRaw().and_then(filterDefaultRegisterValue<0x8000>).transform([this](auto reg){ return calibratedHumidity(reg);});
+    }
+
+    // This is the suggested way of reading it, as the tempco data will be fresh
+    std::optional<EnvironmentMeasurement>
+    readEnvironment()
+    {
+        const auto maybeTemp = readTemperature();
+        const auto maybePres = readPressure();
+        const auto maybeHumi = readHumidity();
+
+        if (maybeTemp && maybePres && maybeHumi)
+            return EnvironmentMeasurement{*maybeTemp, *maybePres, *maybeHumi};
+        return std::nullopt;
     }
 
 private:
@@ -138,17 +197,19 @@ private:
         m_calibration.dig_H6 = readReg<int8_t>(BME280_REGISTER_DIG_H6).value_or(-1);
     }
 
+    template <uint32_t defaultValue = 0x800000>
     static constexpr
     std::optional<uint32_t>
     filterDefaultRegisterValue(uint32_t registerValue)
     {
-        if (registerValue == 0x800000)
+        if (registerValue == defaultValue)
         {
             return std::nullopt;
         }
         return registerValue;
     }
 
+    // temperature in DegC, resolution is 0.01 DegC.
     constexpr
     int32_t
     calibratedTemperature(uint32_t adcValue)
@@ -181,9 +242,55 @@ private:
         var1 = (var1 * ((int32_t)m_calibration.dig_T2)) / 2048;
         var2 = (int32_t)((adc_T / 16) - ((int32_t)m_calibration.dig_T1));
         var2 = (((var2 * var2) / 4096) * ((int32_t)m_calibration.dig_T3)) / 16384;
-        return ((var1 + var2) * 5 + 128) / 256;
+
+        // this updates the global coefficient... ugly but wontfix I am off the clock
+        m_tempFineCoefficient = var1 + var2;
+
+        return (m_tempFineCoefficient * 5 + 128) / 256;
     }
 
+    // Returns pressure in Pa as unsigned 32 bit integer in Q24.8 format
+    // -> Fixpoint with 8 fractional bits.
+    // Output value of “24674867” represents 24674867/256 = 96386.2 Pa = 963.862 hPa
+    constexpr
+    uint32_t
+    calibratedPressure(uint32_t adcValue)
+    {
+        int64_t var1, var2, p;
+        var1 = ((int64_t)m_tempFineCoefficient) - 128000;
+        var2 = var1 * var1 * (int64_t)m_calibration.dig_P6;
+        var2 = var2 + ((var1 * (int64_t)m_calibration.dig_P5) << 17);
+        var2 = var2 + (((int64_t)m_calibration.dig_P4) << 35);
+        var1 = ((var1 * var1 * (int64_t)m_calibration.dig_P3) >> 8) +
+               ((var1 * (int64_t)m_calibration.dig_P2) << 12);
+        var1 =
+            (((((int64_t)1) << 47) + var1)) * ((int64_t)m_calibration.dig_P1) >> 33;
+
+        if (var1 == 0) {
+          return 0; // avoid exception caused by division by zero
+        }
+        p = 1048576 - adcValue >> 4;
+        p = (((p << 31) - var2) * 3125) / var1;
+        var1 = (((int64_t)m_calibration.dig_P9) * (p >> 13) * (p >> 13)) >> 25;
+        var2 = (((int64_t)m_calibration.dig_P8) * p) >> 19;
+
+        return ((p + var1 + var2) >> 8) + (((int64_t)m_calibration.dig_P7) << 4);
+    }
+
+    constexpr
+    uint32_t
+    calibratedHumidity(uint32_t adcValue)
+    {
+        // oh no, adafruit left me in the stich
+        // need to use ugly and mabye wrong BOSCH calculations
+        int32_t v_x1_u32r;
+        v_x1_u32r = m_tempFineCoefficient - ((int32_t)76800);
+        v_x1_u32r = (((((adcValue << 14) - (((int32_t)m_calibration.dig_H4) << 20) - (((int32_t)m_calibration.dig_H5) * v_x1_u32r)) + ((int32_t)16384)) >> 15) * (((((((v_x1_u32r * ((int32_t)m_calibration.dig_H6)) >> 10) * (((v_x1_u32r * ((int32_t)m_calibration.dig_H3)) >> 11) + ((int32_t)32768))) >> 10) + ((int32_t)2097152)) * ((int32_t)m_calibration.dig_H2) + 8192) >> 14));
+        v_x1_u32r = (v_x1_u32r - (((((v_x1_u32r >> 15) * (v_x1_u32r >> 15)) >> 7) * ((int32_t)m_calibration.dig_H1)) >> 4));
+        v_x1_u32r = (v_x1_u32r < 0 ? 0 : v_x1_u32r);
+        v_x1_u32r = (v_x1_u32r > 419430400 ? 419430400 : v_x1_u32r);
+        return (uint32_t)(v_x1_u32r>>12);
+    }
 
     template <typename T, bool bigendian = false, size_t width = sizeof(T)>
     static constexpr T
@@ -262,6 +369,7 @@ private:
 
     i2c_inst_t* m_i2c;
     bme280_calib_data m_calibration;
+    int32_t m_tempFineCoefficient;  // updates with every temperature read
 };
 
 void bmeTest(BME280& bme)
