@@ -85,10 +85,30 @@ int main() {
     auto lastTemperature = bmp.readTemperature();
     auto lastPressure = bmp.readPressureRaw();
     auto lastHumidity = bmp.readHumidityRaw();
+    auto lastValidSampleTime = get_absolute_time();
+
+    // is here because of no signal not working on the first occurrence dunno
+    status.noSignal();
     while(true)
     {
         OscCount oscCount = 0;
-        queue_remove_blocking(&period_fifo, &oscCount);
+        if (!queue_try_remove(&period_fifo, &oscCount))
+        {
+            const auto diff = absolute_time_diff_us(lastValidSampleTime, get_absolute_time());
+            if (diff > expectedMaxCount)
+            {
+                // ugly enough, without the printf, it will not set the led
+                // ON THE FIRST OCCURENCE. Ich habe Feierabend, just hack around it in led init
+                // printf("%lld\n", diff);
+                status.noSignal();
+            }
+            // skip and retry
+            continue;
+        }
+        else
+        {
+            lastValidSampleTime = get_absolute_time();
+        }
 
         if (shouldSampleEnvironment)
         {
@@ -98,25 +118,25 @@ int main() {
             shouldSampleEnvironment = false;
         }
 
-        printf("%lu,%f,%d,%d,%d\n",
-            oscCount,
-            static_cast<double>(1000 * 1000) / oscCount,
-            lastTemperature.value_or(-1),
-            lastPressure.value_or(-1),
-            lastHumidity.value_or(-1));
-
-        // we only count "up" cycle
-        if (oscCount > toCount(expectedOscFreq - expectedDeviation))
+        if (oscCount > expectedMaxCount)
         {
             status.tooLowFrequency();
         }
-        else if (oscCount < toCount(expectedOscFreq + expectedDeviation))
+        else if (oscCount < expectedMinCount)
         {
             status.tooHighFrequency();
         }
         else
         {
             status.expectedFrequency();
+
+            // we effectively skip unexpected samples
+            printf("%lu,%f,%d,%d,%d\n",
+                oscCount,
+                static_cast<double>(1000 * 1000) / oscCount,
+                lastTemperature.value_or(-1),
+                lastPressure.value_or(-1),
+                lastHumidity.value_or(-1));
         }
     }
 

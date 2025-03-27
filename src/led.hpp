@@ -39,7 +39,9 @@ class Status
 public:
     Status(OnboardLED& led, uint8_t brightness = 0x20)
         : led{led}, brightness{brightness}
-    {}
+    {
+        led.put_pixel(0);
+    }
 
     void
     expectedFrequency()
@@ -57,5 +59,11 @@ public:
     tooLowFrequency()
     {
         led.put_pixel(urgb_u32(brightness, brightness/2, 0));
+    }
+
+    void
+    noSignal()
+    {
+        led.put_pixel(urgb_u32(brightness, 0, brightness / 2));
     }
 };

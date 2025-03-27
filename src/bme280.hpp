@@ -121,7 +121,7 @@ private:
         {
             config conf;
             conf.filter = FILTER_X2;
-            conf.t_sb = STANDBY_MS_500;
+            conf.t_sb = STANDBY_MS_1000;
             conf.spi3w_en = 0;
             write8(BME280_REGISTER_CONFIG, conf.get());
         }
