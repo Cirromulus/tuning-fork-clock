@@ -84,7 +84,9 @@ int main() {
 
     // -- init done --
 
-    printf ("Period [us], Frequency [Hz], Temperature [0.01 DegC], Pressure [2^(-8) Pa], Humidity [2^(-10) %RH]\n");
+    printf ("Period [us], Frequency [Hz]");
+    printf (",Temperature [0.01 DegC], Pressure [2^(-8) Pa], Humidity [2^(-10) %RH]");
+    printf (",Temperature [DegC Rounded], Pressure [Pa Rounded], Humidity [%RH Rounded]\n");
     auto lastEnvironmentSample = bme.readEnvironment();
     auto lastValidOscSampleTime = get_absolute_time();
 
