@@ -62,45 +62,12 @@ public:
         return readReg<uint16_t>(BME280_REGISTER_HUMIDDATA);
     }
 
-    // TODO: Is hugely incorrect currently
     // Returns temperature in DegC, resolution is 0.01 DegC.
-    // Output value of "5123" equals 51.23 DegC.
+    // E.g.: Output value of "5123" equals 51.23 DegC.
     std::optional<int32_t>
     readTemperature()
     {
-        const auto maybeRawTemp = readTemperatureRaw();
-        if (!maybeRawTemp || *maybeRawTemp == 0x800000) // value in case temp measurement was disabled
-        {
-            return std::nullopt;
-        }
-
-        const int32_t adc_T = *maybeRawTemp;  // notice conversion to signed
-        printf("Read raw: %d\n", adc_T);
-        printf("T1: %d, T2: %d, T3: %d\n",
-            (int32_t) m_calibration.dig_T1,
-            (int32_t) m_calibration.dig_T2,
-            (int32_t) m_calibration.dig_T3);
-
-        // // Following uglyness is from bosch's ugly calib code
-        int32_t var1, var2;
-        var1 = ((((adc_T>>3) - ((int32_t) m_calibration.dig_T1<<1))) *
-                ((int32_t) m_calibration.dig_T2)) >> 11;
-        var2 = (((((adc_T>>4) - ((int32_t)m_calibration.dig_T1)) *
-                ((adc_T>>4) - ((int32_t) m_calibration.dig_T1))) >> 12) *
-                ((int32_t)m_calibration.dig_T3)) >> 14;
-
-        return ((var1 + var2) * 5 + 128) >> 8;
-
-        // Adafruits version
-        // const int32_t adc_T = *maybeRawTemp >> 4;
-        // int32_t var1, var2;
-        // var1 = (int32_t)((adc_T / 8) - ((int32_t)m_calibration.dig_T1 * 2));
-        // var1 = (var1 * ((int32_t)m_calibration.dig_T2)) / 2048;
-        // var2 = (int32_t)((adc_T / 16) - ((int32_t)m_calibration.dig_T1));
-        // var2 = (((var2 * var2) / 4096) * ((int32_t)m_calibration.dig_T3)) / 16384;
-        // printf("var1: %d, var2: %d\n", var1, var2);
-
-        // return ((var1 + var2) * 5 + 128) / 256;
+        return readTemperatureRaw().and_then(filterDefaultRegisterValue).transform([this](auto reg){ return calibratedTemperature(reg);});
     }
 
 private:
@@ -145,23 +112,24 @@ private:
     */
     void readCoefficients()
     {
-        m_calibration.dig_T1 = readReg<uint16_t>(BME280_REGISTER_DIG_T1).value_or(-1);
-        m_calibration.dig_T2 = readReg<int16_t>(BME280_REGISTER_DIG_T2).value_or(-1);
-        m_calibration.dig_T3 = readReg<int16_t>(BME280_REGISTER_DIG_T3).value_or(-1);
+        // Funny enough, it seems that configuration registers are inverse endian'ed as the value registers
+        m_calibration.dig_T1 = readReg<uint16_t, true>(BME280_REGISTER_DIG_T1).value_or(-1);
+        m_calibration.dig_T2 = readReg<int16_t, true>(BME280_REGISTER_DIG_T2).value_or(-1);
+        m_calibration.dig_T3 = readReg<int16_t, true>(BME280_REGISTER_DIG_T3).value_or(-1);
 
-        m_calibration.dig_P1 = readReg<uint16_t>(BME280_REGISTER_DIG_P1).value_or(-1);
-        m_calibration.dig_P2 = readReg<int16_t>(BME280_REGISTER_DIG_P2).value_or(-1);
-        m_calibration.dig_P3 = readReg<int16_t>(BME280_REGISTER_DIG_P3).value_or(-1);
-        m_calibration.dig_P4 = readReg<int16_t>(BME280_REGISTER_DIG_P4).value_or(-1);
-        m_calibration.dig_P5 = readReg<int16_t>(BME280_REGISTER_DIG_P5).value_or(-1);
-        m_calibration.dig_P6 = readReg<int16_t>(BME280_REGISTER_DIG_P6).value_or(-1);
-        m_calibration.dig_P7 = readReg<int16_t>(BME280_REGISTER_DIG_P7).value_or(-1);
-        m_calibration.dig_P8 = readReg<int16_t>(BME280_REGISTER_DIG_P8).value_or(-1);
-        m_calibration.dig_P9 = readReg<int16_t>(BME280_REGISTER_DIG_P9).value_or(-1);
+        m_calibration.dig_P1 = readReg<uint16_t, true>(BME280_REGISTER_DIG_P1).value_or(-1);
+        m_calibration.dig_P2 = readReg<int16_t, true>(BME280_REGISTER_DIG_P2).value_or(-1);
+        m_calibration.dig_P3 = readReg<int16_t, true>(BME280_REGISTER_DIG_P3).value_or(-1);
+        m_calibration.dig_P4 = readReg<int16_t, true>(BME280_REGISTER_DIG_P4).value_or(-1);
+        m_calibration.dig_P5 = readReg<int16_t, true>(BME280_REGISTER_DIG_P5).value_or(-1);
+        m_calibration.dig_P6 = readReg<int16_t, true>(BME280_REGISTER_DIG_P6).value_or(-1);
+        m_calibration.dig_P7 = readReg<int16_t, true>(BME280_REGISTER_DIG_P7).value_or(-1);
+        m_calibration.dig_P8 = readReg<int16_t, true>(BME280_REGISTER_DIG_P8).value_or(-1);
+        m_calibration.dig_P9 = readReg<int16_t, true>(BME280_REGISTER_DIG_P9).value_or(-1);
 
-        m_calibration.dig_H1 = readReg<uint8_t>(BME280_REGISTER_DIG_H1).value_or(-1);
-        m_calibration.dig_H2 = readReg<int16_t>(BME280_REGISTER_DIG_H2).value_or(-1);
-        m_calibration.dig_H3 = readReg<uint8_t>(BME280_REGISTER_DIG_H3).value_or(-1);
+        m_calibration.dig_H1 = readReg<uint8_t, true>(BME280_REGISTER_DIG_H1).value_or(-1);
+        m_calibration.dig_H2 = readReg<int16_t, true>(BME280_REGISTER_DIG_H2).value_or(-1);
+        m_calibration.dig_H3 = readReg<uint8_t, true>(BME280_REGISTER_DIG_H3).value_or(-1);
 
         m_calibration.dig_H4 = ((int8_t)readReg<uint8_t>(BME280_REGISTER_DIG_H4).value_or(-1) << 4) |
                             (readReg<uint8_t>(BME280_REGISTER_DIG_H4 + 1).value_or(-1) & 0xF);
@@ -170,14 +138,64 @@ private:
         m_calibration.dig_H6 = readReg<int8_t>(BME280_REGISTER_DIG_H6).value_or(-1);
     }
 
-    template <typename T, size_t width = sizeof(T)>
+    static constexpr
+    std::optional<uint32_t>
+    filterDefaultRegisterValue(uint32_t registerValue)
+    {
+        if (registerValue == 0x800000)
+        {
+            return std::nullopt;
+        }
+        return registerValue;
+    }
+
+    constexpr
+    int32_t
+    calibratedTemperature(uint32_t adcValue)
+    {
+        // {
+        //     // Whatever uglyness BOSCH generated, it does not work
+        //     printf("BOSCH:\n");
+        //     const int32_t adc_T = *maybeRawTemp;  // notice conversion to signed
+        //     printf("Read raw: %d\n", adc_T);
+        //     printf("T1: %d, T2: %d, T3: %d\n",
+        //         (int32_t) m_calibration.dig_T1,
+        //         (int32_t) m_calibration.dig_T2,
+        //         (int32_t) m_calibration.dig_T3);
+
+        //     // // Following uglyness is from bosch's ugly calib code
+        //     int32_t var1, var2;
+        //     var1 = ((((adc_T>>3) - ((int32_t) m_calibration.dig_T1<<1))) *
+        //             ((int32_t) m_calibration.dig_T2)) >> 11;
+        //     var2 = (((((adc_T>>4) - ((int32_t)m_calibration.dig_T1)) *
+        //             ((adc_T>>4) - ((int32_t) m_calibration.dig_T1))) >> 12) *
+        //             ((int32_t)m_calibration.dig_T3)) >> 14;
+
+        //     const int32_t centiDeg = ((var1 + var2) * 5 + 128) >> 8;
+        //     printf("var1: %d, var2: %d, = %ld\n", var1, var2, centiDeg);
+        // }
+
+        const int32_t adc_T = adcValue >> 4;
+        int32_t var1, var2;
+        var1 = (int32_t)((adc_T / 8) - ((int32_t)m_calibration.dig_T1 * 2));
+        var1 = (var1 * ((int32_t)m_calibration.dig_T2)) / 2048;
+        var2 = (int32_t)((adc_T / 16) - ((int32_t)m_calibration.dig_T1));
+        var2 = (((var2 * var2) / 4096) * ((int32_t)m_calibration.dig_T3)) / 16384;
+        return ((var1 + var2) * 5 + 128) / 256;
+    }
+
+
+    template <typename T, bool bigendian = false, size_t width = sizeof(T)>
     static constexpr T
     combineOrder(const std::array<uint8_t, width>& regs)
     {
         T comb = 0;
         for (size_t i = 0; i < regs.size(); i++)
         {
-            comb |= regs[i] << ((regs.size() - (i+1)) * 8);
+            if constexpr (bigendian)
+                comb |= regs[i] << (i * 8);
+            else
+                comb |= regs[i] << ((regs.size() - (i+1)) * 8);
         }
         return comb;
     }
@@ -194,6 +212,8 @@ private:
         After this the slave is addressed in read mode (RW = ‘1’) at address 111011X1,
         after which the slave sends out data from auto-incremented register addresses
         until a NOACKM and stop condition occurs.
+
+        FIXME: The other address does not work
         */
 
         if (i2c_write_blocking_until(m_i2c, deviceAddr, &addr, 1, true, make_timeout_time_ms(timeout_ms)) != 1)
@@ -211,18 +231,19 @@ private:
         return buffer;
     }
 
-    template <typename T>
+    template <typename T, bool bigendian = false>
     std::optional<T>
     readReg(RegAddr addr)
     {
-        return readReg<sizeof(T)>(addr).transform(combineOrder<T>);
+        return readReg<sizeof(T)>(addr).transform(combineOrder<T, bigendian>);
     }
 
     // special case
+    template <bool bigendian = false>
     std::optional<uint32_t>
     readRegThree(RegAddr addr)
     {
-        return readReg<3>(addr).transform(combineOrder<uint32_t, 3>);
+        return readReg<3>(addr).transform(combineOrder<uint32_t, bigendian, 3>);
     }
 
     bool
@@ -242,3 +263,27 @@ private:
     i2c_inst_t* m_i2c;
     bme280_calib_data m_calibration;
 };
+
+void bmeTest(BME280& bme)
+{
+    while (!bme.init())
+    {
+        printf("Could not init BME280.\n");
+        sleep_ms(1000);
+    }
+
+
+    while(true)
+    {
+        const auto maybeTemperature = bme.readTemperature();
+        if (maybeTemperature)
+        {
+            printf("Temp: %lu * 0.01 Celsius\n", *maybeTemperature);
+        }
+        else
+        {
+            printf("No worky-work\n");
+        }
+        sleep_ms(1000);
+    }
+}

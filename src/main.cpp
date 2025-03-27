@@ -59,13 +59,17 @@ int main() {
     OnboardLED led{16};
     Status status{led, 0x03};
 
-    BME280 bmp{setupTempI2c()};
+    BME280 bme{setupTempI2c()};
 
-    while (!bmp.init())
+    // this will block forever
+    bmeTest(bme);
+
+    while (!bme.init())
     {
         printf("Could not init BME280.\n");
         sleep_ms(1000);
     }
+
 
     // negative timeout means exact delay (rather than delay between callbacks)
     if (!add_repeating_timer_ms(2000, timer_callback, NULL, &environment_sample_timer))
@@ -82,9 +86,9 @@ int main() {
     // -- init done --
 
     printf ("Period [us], Frequency [Hz], Temperature [raw], Pressure [raw], Humidity [raw]\n");
-    auto lastTemperature = bmp.readTemperature();
-    auto lastPressure = bmp.readPressureRaw();
-    auto lastHumidity = bmp.readHumidityRaw();
+    auto lastTemperature = bme.readTemperature();
+    auto lastPressure = bme.readPressureRaw();
+    auto lastHumidity = bme.readHumidityRaw();
     auto lastValidSampleTime = get_absolute_time();
 
     // is here because of no signal not working on the first occurrence dunno
@@ -112,9 +116,9 @@ int main() {
 
         if (shouldSampleEnvironment)
         {
-            lastTemperature = bmp.readTemperatureRaw();
-            lastPressure = bmp.readPressureRaw();
-            lastHumidity = bmp.readHumidityRaw();
+            lastTemperature = bme.readTemperatureRaw();
+            lastPressure = bme.readPressureRaw();
+            lastHumidity = bme.readHumidityRaw();
             shouldSampleEnvironment = false;
         }
 
