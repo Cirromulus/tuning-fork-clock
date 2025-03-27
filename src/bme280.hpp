@@ -269,7 +269,7 @@ private:
         if (var1 == 0) {
           return 0; // avoid exception caused by division by zero
         }
-        p = 1048576 - adcValue >> 4;
+        p = 1048576 - (adcValue >> 4);
         p = (((p << 31) - var2) * 3125) / var1;
         var1 = (((int64_t)m_calibration.dig_P9) * (p >> 13) * (p >> 13)) >> 25;
         var2 = (((int64_t)m_calibration.dig_P8) * p) >> 19;
