@@ -84,7 +84,7 @@ int main() {
 
     // -- init done --
 
-    printf ("Period [us]");
+    printf ("%llu Periods [us]", periodsPerMeasurement);
     printf (",Temperature [0.01 DegC], Pressure [2^(-8) Pa], Humidity [2^(-10) %RH]");
     printf (", Frequency [Hz], Temperature [DegC Rounded], Pressure [Pa Rounded], Humidity [%RH Rounded]\n");
     auto lastEnvironmentSample = bme.readEnvironment();
@@ -134,7 +134,7 @@ int main() {
             const auto env = lastEnvironmentSample.value_or(BME280::EnvironmentMeasurement{0,0,0});
 
             // we effectively skip unexpected samples
-            printf("%lu,", oscCount);
+            printf("%lu", oscCount);
 
             printf(",%ld,%lu,%lu",
                 env.temperature_centidegree,
@@ -143,7 +143,7 @@ int main() {
 
             // now the derived values
             printf(",%f,%ld,%lu,%lu\n",
-                    static_cast<double>(1000 * 1000) / oscCount,
+                    static_cast<double>(referenceClockFrequency * periodsPerMeasurement) / oscCount,
                     env.getTemperatureDegree(),
                     env.getPressurePa(),
                     env.getHumidityPercentRH());
@@ -155,13 +155,21 @@ int main() {
 
 void osc_callback(uint gpio, uint32_t events)
 {
-    // static_assert(decltype(declval(time_us_32())) == OscCount);
-    const OscCount now = time_us_32();
-    const OscCount diff = now - oscCount;
-    oscCount = now;
-    if (!queue_try_add(&period_fifo, &diff)) {
-        printf("FIFO was full\n");
-    };
+    static size_t currentCycle = 0;
+    if (currentCycle >= periodsPerMeasurement)
+    {
+        const OscCount now = time_us_32();
+        const OscCount diff = now - oscCount;
+        oscCount = now;
+        currentCycle = 0;
+        if (!queue_try_add(&period_fifo, &diff)) {
+            printf("FIFO was full\n");
+        };
+    }
+    else
+    {
+        currentCycle++;
+    }
 }
 
 bool timer_callback(__unused repeating_timer_t *rt) {

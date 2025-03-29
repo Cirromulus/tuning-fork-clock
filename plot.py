@@ -4,8 +4,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import sqlite3 as sq
-import data
-
+from argparse import ArgumentParser
+import data # definitions
 from scipy.signal import savgol_filter
 
 
@@ -19,10 +19,19 @@ def readSqlite(filename) -> pd.DataFrame:
     ]
     return pd.read_sql_query("SELECT * from logdata WHERE " + ' AND '.join(plausibility_filters), con)
 
-# TODO: Make parameter, obvsly
-dataframe = readSqlite('2025-03-29_12-00-05_sensor_log.db')
-# print (dataframe)
 
+parser = ArgumentParser(
+            prog='plot.py',
+            description='Plots statistics about data of tuning fork')
+
+parser.add_argument('database')
+args = parser.parse_args()
+print (args)
+
+dataframe = readSqlite(args.database)
+
+print ("Data:")
+print (dataframe)
 print ("Estimated covariance between columns:")
 print (dataframe.cov())
 print ("Variance:")
@@ -44,7 +53,8 @@ def printStdDev(name, thing):
 
 printStdDev("period", period)
 
-period_smooth = savgol_filter(columns['period'], int(len(period) / 1000), 3)
+order = 3
+period_smooth = savgol_filter(columns['period'], max(order + 1, int(len(period) / 1000)), order)
 printStdDev("filtered period", period_smooth)
 fig, ax1 = plt.subplots()
 ax2 = ax1.twinx()
@@ -60,8 +70,10 @@ period_range = (min(period), max(period))
 period_resolution = 1
 temp_range = (min(temp), max(temp))
 temp_resolution = 10
-period_bin = (period_range[1] - period_range[0]) * period_resolution
-temp_bin = (temp_range[1] - temp_range[0]) * temp_resolution
+period_bin = max(1, (period_range[1] - period_range[0]) * period_resolution)
+temp_bin = max(1, (temp_range[1] - temp_range[0]) * temp_resolution)
+
+print(temp_bin)
 
 plt.hist2d(period, temp, range=(period_range, temp_range), bins=(int(period_bin), int(temp_bin)))
 plt.show()
