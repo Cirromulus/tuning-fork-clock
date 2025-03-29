@@ -84,9 +84,9 @@ int main() {
 
     // -- init done --
 
-    printf ("Period [us], Frequency [Hz]");
+    printf ("Period [us]");
     printf (",Temperature [0.01 DegC], Pressure [2^(-8) Pa], Humidity [2^(-10) %RH]");
-    printf (",Temperature [DegC Rounded], Pressure [Pa Rounded], Humidity [%RH Rounded]\n");
+    printf (", Frequency [Hz], Temperature [DegC Rounded], Pressure [Pa Rounded], Humidity [%RH Rounded]\n");
     auto lastEnvironmentSample = bme.readEnvironment();
     auto lastValidOscSampleTime = get_absolute_time();
 
@@ -134,16 +134,16 @@ int main() {
             const auto env = lastEnvironmentSample.value_or(BME280::EnvironmentMeasurement{0,0,0});
 
             // we effectively skip unexpected samples
-            printf("%lu,%f",
-                oscCount,
-                static_cast<double>(1000 * 1000) / oscCount);
+            printf("%lu,", oscCount);
 
             printf(",%ld,%lu,%lu",
                 env.temperature_centidegree,
                 env.pressure_q23_8,
                 env.humidity_q22_10);
 
-            printf(",%ld,%lu,%lu\n",
+            // now the derived values
+            printf(",%f,%ld,%lu,%lu\n",
+                    static_cast<double>(1000 * 1000) / oscCount,
                     env.getTemperatureDegree(),
                     env.getPressurePa(),
                     env.getHumidityPercentRH());
