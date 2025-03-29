@@ -311,17 +311,7 @@ private:
     std::optional<std::array<uint8_t, width>>
     readReg(RegAddr addr)
     {
-        // write then read.
-        /*
-        To be able to read registers, first the register address must be sent in write mode
-        (slave address 111011X0).
-        Then either a stop or a repeated start condition must be generated.
-        After this the slave is addressed in read mode (RW = ‘1’) at address 111011X1,
-        after which the slave sends out data from auto-incremented register addresses
-        until a NOACKM and stop condition occurs.
-
-        FIXME: The other address does not work
-        */
+        // "write then read"
 
         if (i2c_write_blocking_until(m_i2c, deviceAddr, &addr, 1, true, make_timeout_time_ms(timeout_ms)) != 1)
         {
