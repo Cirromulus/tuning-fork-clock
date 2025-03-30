@@ -12,9 +12,6 @@
 #include <stdio.h>
 #include <cinttypes>   // uhg, oldschool
 #include <array>
-// #include <atomic>    -latomic not found?
-
-
 
 bool timer_callback(repeating_timer_t *rt);
 
