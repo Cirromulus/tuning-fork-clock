@@ -10,8 +10,11 @@ class ColDesc:
     def getSql(self) -> str:
         return f"\'{self.name}' {self.type}"
 
-    def normalize(self, value) -> int: # not actually an integer
+    def normalize(self, value) -> float:
         return value * self.fractional
+
+    def denormalize(self, value) -> float:
+        return value * (1 / self.fractional)
 
 # "oversampling"
 expected_frequency = 1 / 440    # should be the same value as in config.hpp!

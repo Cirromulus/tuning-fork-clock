@@ -16,9 +16,11 @@ def readSqlite(filename) -> pd.DataFrame:
     con = sq.connect(f"file:{filename}?mode=ro", uri=True)
     plausibility_filters = [
         f"{data.TABLE_FORMAT['temperature'].name} != 0", # TODO: Better indication of a failed temperature measurement
-        f"{data.TABLE_FORMAT['period'].name} > 2250",    # Ugly AF. Should do a difference-between-samples instead
+        f"{data.TABLE_FORMAT['period'].name} > {data.TABLE_FORMAT['period'].denormalize(2250)}",    # Ugly AF. Should do a difference-between-samples instead
     ]
-    return pd.read_sql_query("SELECT * from logdata WHERE " + ' AND '.join(plausibility_filters), con)
+    query = "SELECT * from logdata WHERE " + ' AND '.join(plausibility_filters)
+    print (query)
+    return pd.read_sql_query(query, con)
 
 
 parser = ArgumentParser(
@@ -38,7 +40,6 @@ print ("Estimated covariance between columns:")
 print (dataframe.cov())
 print ("Variance:")
 print (dataframe.var())
-
 
 columns = {}
 for colname, desc in data.TABLE_FORMAT.items():
@@ -65,25 +66,32 @@ if args.with_filtered:
     period_smooth = savgol_filter(columns['period'], max(order + 1, int(len(period) / 1000)), order)
     printStdDev("filtered period", period_smooth)
 
+
+def legendAllAxes(*axis):
+    lines = [line for ax in axis for line in ax.get_lines()]
+    labs = [l.get_label() for l in lines]
+    axis[0].legend(lines, labs)
+
 # First: Just print the data we have.
 fig, ax1 = plt.subplots()
 ax2 = ax1.twinx()
 ax1.set_xlabel('Sample')
-ax1.set_ylabel('Period [us]', color='green')
-ax1.plot(period, 'green')
+ax1.set_ylabel('Period [us]')
+ax1.plot(period, 'green', label='Period')
 if period_smooth:
     ax1.plot(period_smooth, 'lightgreen')
-ax2.set_ylabel('Temperature [Celsius]', color='red')
-ax2.plot(temp, 'darkred')
+ax2.set_ylabel('Temperature [Celsius]')
+ax2.plot(temp, 'darkred', label='Temperature')
+legendAllAxes(ax1, ax2)
 plt.ticklabel_format(style='plain')
-plt.title("Raw data")
+plt.title("Measurement data")
 
 
 # Now: Try to find a correlation
 
 def getRangeAndBin(name):
     range = (min(columns[name]) - 1, max(columns[name]) + 1)
-    resolution = 1 / data.TABLE_FORMAT[name].fractional
+    resolution = data.TABLE_FORMAT[name].denormalize(1)
     bin = max(1, (range[1] - range[0]) * resolution)
     return (range, bin)
 
@@ -104,7 +112,7 @@ def fit(x, y, order):
     print (cov)
     return np.poly1d(fit)
 
-period_fit = fit(temp, period, 1)  # We expect a linear relationship
+period_fit = fit(temp, period, 2)  # We expect a linear relationship, but let's add a factor
 valid_period_fit_range = np.arange(temp_range[0], temp_range[1], data.TABLE_FORMAT['temperature'].fractional)
 
 plt.figure()
@@ -136,15 +144,25 @@ print (f"With linear fit for period estimation, we got an improvement factor of 
 fig, ax1 = plt.subplots()
 ax2 = ax1.twinx()
 ax1.set_xlabel('Sample Number')
-ax1.set_ylabel('Period [us]', color='green')
-ax1.plot(period, 'green', label="Measured")
-ax1.plot(estimated_period, 'red', label="Estimated")
-ax1.legend(loc='upper right')
+ax1.set_ylabel('Period [us]')
+ax1.plot(period, 'green', label="Measured Period")
+ax1.plot(estimated_period, 'red', label="Estimated Period")
 
 ax2.set_ylabel('Difference [us]')
-ax2.plot(difference_period, 'blue', label='Difference')
+ax2.plot(difference_period,
+         'blue', label='Difference')
 ax2.axhline(0, linestyle='dashed', color='lightblue', alpha=.5)
-ax2.legend(loc='upper center')
+ax2.fill_between(ax2.lines[0].get_xdata(), difference_period, 0,
+          color='blue', alpha=.5)
+
+# unten, oben = ax2.get_ylim()
+yoffs = 0# unten
+ax2.plot(abs(difference_period)+yoffs,
+          color='teal', alpha=.25, label="Difference (abs)")
+# reset ylim to have difference really touching bottom
+# ax2.set_ylim((unten, oben))
+
+legendAllAxes(ax1, ax2)
 plt.title("Correction Factor Estimation")
 plt.show()
 
