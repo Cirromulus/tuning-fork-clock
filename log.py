@@ -54,10 +54,10 @@ try:
 
         if datetime.now() > lastprint + PRINT_EVERY:
             numrows = db_con.execute(f"SELECT COUNT(1) from {data.TABLE_NAME}").fetchone()[0]
-            print (f"Currently collected {numrows} samples.", end='\r')
+            print (f"\rCurrently collected {numrows} samples.", end='')
             lastprint = datetime.now()
 except:
-    print("\nExceptional stuff.")
+    print("Exceptional stuff.")
     pass
 
 print (f"Committing db as {db_file_name}...")
