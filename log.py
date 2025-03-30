@@ -63,6 +63,8 @@ try:
 except KeyboardInterrupt:
     print("Exceptional stuff")
     pass
+except serial.SerialException:
+    print ("Disco! (disco who?) Disconnected!")
 
 print (f"Committing db as {db_file_name}...")
 db.commit()
