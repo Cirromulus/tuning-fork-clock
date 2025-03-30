@@ -28,9 +28,9 @@ parser = ArgumentParser(
             description='Plots statistics about data of tuning fork')
 
 parser.add_argument('database')
-parser.add_argument('--with_filtered', default=False, action='store_true')
+parser.add_argument('--no-emit-plot', default=True, action='store_false',dest ='emit_plot')
 args = parser.parse_args()
-print (args)
+# print (args)
 
 dataframe = readSqlite(args.database)
 
@@ -38,8 +38,8 @@ print ("Data:")
 print (dataframe)
 print ("Estimated covariance between columns:")
 print (dataframe.cov())
-print ("Variance:")
-print (dataframe.var())
+print ()
+
 
 columns = {}
 for colname, desc in data.TABLE_FORMAT.items():
@@ -53,7 +53,7 @@ sample_time_us = np.cumsum(np.array(dataframe[data.TABLE_FORMAT['period'].name])
 sample_time_s = sample_time_us / 10000000
 duration_of_measurement_us = sample_time_us[-1]
 avg_duration_of_sample_us = duration_of_measurement_us / len(dataframe)
-print (f"Duration of measurement: {duration_of_measurement_us / 1000000}s (based on reference clock)")
+print (f"Duration of measurement run: {duration_of_measurement_us / 1000000}s (based on reference clock)")
 
 
 def printStdDev(name, thing, sample_mean = None):
@@ -67,31 +67,23 @@ def printStdDev(name, thing, sample_mean = None):
 
 uncorrected_period_std = printStdDev("period", period)
 
-period_smooth = None
-if args.with_filtered:
-    order = 3
-    period_smooth = savgol_filter(columns['period'], max(order + 1, int(len(period) / 1000)), order)
-    printStdDev("filtered period", period_smooth)
-
-
 def legendAllAxes(*axis):
     lines = [line for ax in axis for line in ax.get_lines()]
     labs = [l.get_label() for l in lines]
     axis[0].legend(lines, labs)
 
-# First: Just print the data we have.
-fig, ax1 = plt.subplots()
-ax2 = ax1.twinx()
-ax1.set_xlabel('Time [s]')
-ax1.set_ylabel('Period [us]')
-ax1.plot(sample_time_s, period, 'green', label='Period')
-if period_smooth:
-    ax1.plot(sample_time_s, period_smooth, 'lightgreen')
-ax2.set_ylabel('Temperature [Celsius]')
-ax2.plot(sample_time_s,temp, 'darkred', label='Temperature')
-legendAllAxes(ax1, ax2)
-plt.ticklabel_format(style='plain')
-plt.title("Measurement data")
+if args.emit_plot:
+    # First: Just print the data we have.
+    fig, ax1 = plt.subplots()
+    ax2 = ax1.twinx()
+    ax1.set_xlabel('Time [s]')
+    ax1.set_ylabel('Period [us]')
+    ax1.plot(sample_time_s, period, 'green', label='Period')
+    ax2.set_ylabel('Temperature [Celsius]')
+    ax2.plot(sample_time_s,temp, 'darkred', label='Temperature')
+    legendAllAxes(ax1, ax2)
+    plt.ticklabel_format(style='plain')
+    plt.title("Measurement data")
 
 
 # Now: Try to find a correlation
@@ -102,11 +94,6 @@ def getRangeAndBin(name):
     bin = max(1, (range[1] - range[0]) * resolution)
     return (range, bin)
 
-period_range, period_bin = getRangeAndBin('period')
-temp_range, temp_bin = getRangeAndBin('temperature')
-print (f"Period range: {period_range} -> bin {period_bin}")
-print (f"Temp range  : {temp_range} -> bin {temp_bin}")
-
 def fit(x, y, order):
     fit, cov = np.polyfit(x, y, order, cov=True)
     def asFunction(factors):
@@ -114,30 +101,42 @@ def fit(x, y, order):
         ret += " + ".join([f'{f}x^{i}' for i, f in enumerate(reversed(factors))])
         return ret
 
-    print (f"Factors of best fit: {asFunction(fit)}")
-    print ("Covariance:")
+    print (f"**\nFactors of best fit: {asFunction(fit)}\n**")
+    print ("Covariance of fit:")
     print (cov)
     return np.poly1d(fit)
 
+period_range, period_bin = getRangeAndBin('period')
+temp_range, temp_bin = getRangeAndBin('temperature')
+# print (f"Period range: {period_range} -> bin {period_bin}")
+# print (f"Temp range  : {temp_range} -> bin {temp_bin}")
+
+print ("On scaled data:")
 period_fit = fit(temp, period, 2)  # We expect a linear relationship, but let's add a factor
-valid_period_fit_range = np.arange(temp_range[0], temp_range[1], data.TABLE_FORMAT['temperature'].fractional)
+print ("Unscaled data: ")
+# TODO: this could be directly separate without the whole plot stuff.
+fit(dataframe[data.TABLE_FORMAT['temperature'].name], dataframe[data.TABLE_FORMAT['period'].name], 1)
 
-plt.figure()
-plt.hist2d(temp, period,
-           range=(temp_range, period_range),
-           bins=(int(temp_bin), int(period_bin)),
-           )
-plt.scatter(temp, period,
-            alpha=.15,
-            label="Measured samples")
-plt.plot(valid_period_fit_range, period_fit(valid_period_fit_range),
-         'red', label="Best fit")
 
-plt.legend()
-plt.ticklabel_format(style='plain')
-plt.xlabel('Temperature [Celsius]')
-plt.ylabel('Cycle Period [us]')
-plt.title("Correlation Data")
+if args.emit_plot:
+    valid_period_fit_range = np.arange(temp_range[0], temp_range[1], data.TABLE_FORMAT['temperature'].fractional)
+
+    plt.figure()
+    plt.hist2d(temp, period,
+            range=(temp_range, period_range),
+            bins=(int(temp_bin), int(period_bin)),
+            )
+    plt.scatter(temp, period,
+                alpha=.15,
+                label="Measured samples")
+    plt.plot(valid_period_fit_range, period_fit(valid_period_fit_range),
+            'red', label="Best fit")
+
+    plt.legend()
+    plt.ticklabel_format(style='plain')
+    plt.xlabel('Temperature [Celsius]')
+    plt.ylabel('Cycle Period [us]')
+    plt.title("Correlation Data")
 
 # OK, and apply inverse of cerrelation to try linearize period
 
@@ -150,28 +149,29 @@ improvement_ratio = uncorrected_period_std / corrected_period_std
 print (f"With linear fit for period estimation, we got an improvement factor of {improvement_ratio}.")
 print (f"Hypothetical drift with given correction in this specific dataset: {(cumulative_difference[-1] * avg_duration_of_sample_us) / 1000000} seconds")
 
-fig, ax1 = plt.subplots()
-plt.title("Correction Factor Estimation")
-ax2 = ax1.twinx()
-ax1.set_xlabel('Time [s]')
-ax1.set_ylabel('Period [us]')
-ax1.plot(sample_time_s, period, 'green', label="Measured Period")
-ax1.plot(sample_time_s, estimated_period, 'red', label="Estimated Period")
+if args.emit_plot:
+    fig, ax1 = plt.subplots()
+    plt.title("Correction Factor Estimation")
+    ax2 = ax1.twinx()
+    ax1.set_xlabel('Time [s]')
+    ax1.set_ylabel('Period [us]')
+    ax1.plot(sample_time_s, period, 'green', label="Measured Period")
+    ax1.plot(sample_time_s, estimated_period, 'red', label="Estimated Period")
 
-ax2.set_ylabel('Difference [us]')
-ax2.plot(sample_time_s, difference_period,
-         'blue', label='Difference')
-ax2.axhline(0, linestyle='dashed', color='lightblue', alpha=.5)
-ax2.fill_between(sample_time_s, difference_period, 0,
-          color='blue', alpha=.5)
+    ax2.set_ylabel('Difference [us]')
+    ax2.plot(sample_time_s, difference_period,
+            'blue', label='Difference')
+    ax2.axhline(0, linestyle='dashed', color='lightblue', alpha=.5)
+    ax2.fill_between(sample_time_s, difference_period, 0,
+            color='blue', alpha=.5)
 
-# unten, oben = ax2.get_ylim()
-# yoffs = 0# unten
-# ax2.plot(sample_time_s, abs(difference_period)+yoffs,
-#           color='teal', alpha=.25, label="Difference (abs)")
-# reset ylim to have difference really touching bottom
-# ax2.set_ylim((unten, oben))
-legendAllAxes(ax1, ax2)
+    # unten, oben = ax2.get_ylim()
+    # yoffs = 0# unten
+    # ax2.plot(sample_time_s, abs(difference_period)+yoffs,
+    #           color='teal', alpha=.25, label="Difference (abs)")
+    # reset ylim to have difference really touching bottom
+    # ax2.set_ylim((unten, oben))
+    legendAllAxes(ax1, ax2)
 
 
 # This is TODO...
@@ -181,18 +181,19 @@ temperature_change = np.diff(temp)
 temperature_change_rate = temperature_change / np.array(dataframe[data.TABLE_FORMAT['period'].name])[:1]
 smoothed_temp_change_rate = savgol_filter(temperature_change_rate, 500, 2)
 
-fig, ax1 = plt.subplots()
-ax2 = ax1.twinx()
-plt.title("Drift Evaluation")
-plt.xlabel('Time [s]')
-ax1.set_ylabel('Difference [us]')
-ax2.set_ylabel('Temperature change rate [Celsius / s]')
-ax1.plot(sample_time_s, difference_period,
-         label='Difference from Reference', color='green')
-ax2.plot(sample_time_s[1:], smoothed_temp_change_rate,
-         label='Temperature change (filtered)', color="red")
-legendAllAxes(ax1, ax2)
+if args.emit_plot:
+    fig, ax1 = plt.subplots()
+    ax2 = ax1.twinx()
+    plt.title("Drift Evaluation")
+    plt.xlabel('Time [s]')
+    ax1.set_ylabel('Difference [us]')
+    ax2.set_ylabel('Temperature change rate [Celsius / s]')
+    ax1.plot(sample_time_s, difference_period,
+            label='Difference from Reference', color='green')
+    ax2.plot(sample_time_s[1:], smoothed_temp_change_rate,
+            label='Temperature change (filtered)', color="red")
+    legendAllAxes(ax1, ax2)
 
 
-
-plt.show()
+if args.emit_plot:
+    plt.show()

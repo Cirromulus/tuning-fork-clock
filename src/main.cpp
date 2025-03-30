@@ -1,7 +1,7 @@
 #include "config.hpp"
-// #include "averager.hpp"
 #include "bme280.hpp"
 #include "led.hpp"
+#include "estimator.hpp"
 
 #include <pico/stdlib.h>
 #include <pico/util/queue.h>
@@ -52,6 +52,15 @@ i2c_inst_t* setupTempI2c()
     return i2c1;
 }
 
+void printCsvHeader()
+{
+    printf ("Period duration [us / %lu]", periodsPerMeasurement);
+    printf (", Temperature [0.01 DegC], Pressure [2^(-8) Pa], Humidity [2^(-10) %RH]");
+    printf (", Current Period Estimation [us], Estimated elapsed time [us]");
+    printf (", Difference to internal time [us]");
+    printf ("\n");
+}
+
 int main() {
     setup_default_uart();
     stdio_init_all();
@@ -71,7 +80,7 @@ int main() {
     }
 
     // negative timeout means exact delay (rather than delay between callbacks)
-    if (!add_repeating_timer_ms(2000, timer_callback, NULL, &environment_sample_timer))
+    if (!add_repeating_timer_ms(-2000, timer_callback, NULL, &environment_sample_timer))
     {
         printf("Failed to add enviroment sampling timer\n");
     }
@@ -84,11 +93,13 @@ int main() {
 
     // -- init done --
 
-    printf ("%llu Periods [us]", periodsPerMeasurement);
-    printf (",Temperature [0.01 DegC], Pressure [2^(-8) Pa], Humidity [2^(-10) %RH]");
-    printf (", Frequency [Hz], Temperature [DegC Rounded], Pressure [Pa Rounded], Humidity [%RH Rounded]\n");
+    static constexpr size_t printHeaderEveryNLines = 60 * (periodsPerMeasurement / expectedOscFreq);
+    size_t currentLine = printHeaderEveryNLines;
+
     auto lastEnvironmentSample = bme.readEnvironment();
     auto lastValidOscSampleTime = get_absolute_time();
+    uint64_t estimatedElapsedTime_us = 0;
+    constexpr CompensationEstimator estimator{temperatureCalibrationPolynom};
 
     // is here because of no signal not working on the first occurrence dunno
     status.noSignal();
@@ -129,11 +140,22 @@ int main() {
         }
         else
         {
+            // we effectively skip unexpected samples
+
             status.expectedFrequency();
 
-            const auto env = lastEnvironmentSample.value_or(BME280::EnvironmentMeasurement{0,0,0});
+            const auto env = lastEnvironmentSample.value_or(BME280::EnvironmentMeasurement{-666,0,0});
 
-            // we effectively skip unexpected samples
+            // estimator polynom is based on unnormalized data
+            const double estimatedPeriod_us = estimator.estimate(env.temperature_centidegree);
+            estimatedElapsedTime_us += llround(estimatedPeriod_us);
+
+            if (currentLine >= printHeaderEveryNLines)
+            {
+                printCsvHeader();
+                currentLine = 0;
+            }
+
             printf("%lu", oscCount);
 
             printf(",%ld,%lu,%lu",
@@ -141,12 +163,20 @@ int main() {
                 env.pressure_q23_8,
                 env.humidity_q22_10);
 
+            printf(",%f,%lld", estimatedPeriod_us, estimatedElapsedTime_us);
+            printf(",%lld", time_us_64() - estimatedElapsedTime_us);
+
             // now the derived values
-            printf(",%f,%ld,%lu,%lu\n",
-                    static_cast<double>(referenceClockFrequency * periodsPerMeasurement) / oscCount,
-                    env.getTemperatureDegree(),
-                    env.getPressurePa(),
-                    env.getHumidityPercentRH());
+            // printf(",%f,%ld,%lu,%lu",
+            //         static_cast<double>(referenceClockFrequency * periodsPerMeasurement) / oscCount,
+            //         env.getTemperatureDegree(),
+            //         env.getPressurePa(),
+            //         env.getHumidityPercentRH()
+            // );
+
+            printf("\n");
+
+            currentLine++;
         }
     }
 
