@@ -16,7 +16,7 @@ def readSqlite(filename) -> pd.DataFrame:
     con = sq.connect(f"file:{filename}?mode=ro", uri=True)
     plausibility_filters = [
         f"{data.TABLE_FORMAT['temperature'].name} != 0", # TODO: Better indication of a failed temperature measurement
-        # f"{data.TABLE_FORMAT['period'].name} > "
+        f"{data.TABLE_FORMAT['period'].name} > 2250",    # Ugly AF. Should do a difference-between-samples instead
     ]
     return pd.read_sql_query("SELECT * from logdata WHERE " + ' AND '.join(plausibility_filters), con)
 
@@ -48,12 +48,16 @@ for colname, desc in data.TABLE_FORMAT.items():
 period = columns['period']
 temp = columns['temperature']
 
-def printStdDev(name, thing):
+def printStdDev(name, thing, sample_mean = None):
     std, mean = (np.std(thing), np.mean(thing))
     seconds_per_day = 24 * 60 * 60
-    print (f"Standard deviation of the {name}: {std} us (per {mean}) -> {std * seconds_per_day / mean} s / day")
+    if not sample_mean:
+        # this is if we apply a difference, which is of course offset to an absolute value
+        sample_mean = mean
+    print (f"Standard deviation of the {name}: {std} us (mean {mean}) -> {std * seconds_per_day / sample_mean} s / day")
+    return std
 
-printStdDev("period", period)
+uncorrected_period_std = printStdDev("period", period)
 
 period_smooth = None
 if args.with_filtered:
@@ -71,6 +75,8 @@ if period_smooth:
     ax1.plot(period_smooth, 'lightgreen')
 ax2.set_ylabel('Temperature [Celsius]', color='red')
 ax2.plot(temp, 'darkred')
+plt.ticklabel_format(style='plain')
+plt.title("Raw data")
 
 
 # Now: Try to find a correlation
@@ -87,25 +93,58 @@ print (f"Period range: {period_range} -> bin {period_bin}")
 print (f"Temp range  : {temp_range} -> bin {temp_bin}")
 
 def fit(x, y, order):
-    fit = np.polyfit(x, y, order)
-    print (fit)
+    fit, cov = np.polyfit(x, y, order, cov=True)
+    def asFunction(factors):
+        ret = "f(x) = "
+        ret += " + ".join([f'{f}x^{i}' for i, f in enumerate(reversed(factors))])
+        return ret
+
+    print (f"Factors of best fit: {asFunction(fit)}")
+    print ("Covariance:")
+    print (cov)
     return np.poly1d(fit)
 
-plt.figure()
-period_fit = fit(temp, period, 2)  # We expect a linear relationship
+period_fit = fit(temp, period, 1)  # We expect a linear relationship
 valid_period_fit_range = np.arange(temp_range[0], temp_range[1], data.TABLE_FORMAT['temperature'].fractional)
 
+plt.figure()
 plt.hist2d(temp, period,
            range=(temp_range, period_range),
            bins=(int(temp_bin), int(period_bin)),
            )
 plt.scatter(temp, period,
-            alpha=.15)
-plt.plot(valid_period_fit_range, period_fit(valid_period_fit_range), 'red')
+            alpha=.15,
+            label="Measured samples")
+plt.plot(valid_period_fit_range, period_fit(valid_period_fit_range),
+         'red', label="Best fit")
 
+plt.legend()
 plt.ticklabel_format(style='plain')
 plt.xlabel('Temperature [Celsius]')
 plt.ylabel('Cycle Period [us]')
-plt.show()
+plt.title("Correlation Data")
 
 # OK, and apply inverse of cerrelation to try linearize period
+
+estimated_period = period_fit(temp)
+difference_period = estimated_period - period
+corrected_period_std = printStdDev("Corrected Period", difference_period, sample_mean=np.mean(period))
+
+improvement_ratio = uncorrected_period_std / corrected_period_std
+print (f"With linear fit for period estimation, we got an improvement factor of {improvement_ratio}.")
+
+fig, ax1 = plt.subplots()
+ax2 = ax1.twinx()
+ax1.set_xlabel('Sample Number')
+ax1.set_ylabel('Period [us]', color='green')
+ax1.plot(period, 'green', label="Measured")
+ax1.plot(estimated_period, 'red', label="Estimated")
+ax1.legend(loc='upper right')
+
+ax2.set_ylabel('Difference [us]')
+ax2.plot(difference_period, 'blue', label='Difference')
+ax2.axhline(0, linestyle='dashed', color='lightblue', alpha=.5)
+ax2.legend(loc='upper center')
+plt.title("Correction Factor Estimation")
+plt.show()
+
