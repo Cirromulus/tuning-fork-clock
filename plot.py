@@ -49,7 +49,9 @@ for colname, desc in data.TABLE_FORMAT.items():
 period = columns['period']
 temp = columns['temperature']
 
-duration_of_measurement_us = np.sum(dataframe[data.TABLE_FORMAT['period'].name])
+sample_time_us = np.cumsum(np.array(dataframe[data.TABLE_FORMAT['period'].name]))
+sample_time_s = sample_time_us / 10000000
+duration_of_measurement_us = sample_time_us[-1]
 avg_duration_of_sample_us = duration_of_measurement_us / len(dataframe)
 print (f"Duration of measurement: {duration_of_measurement_us / 1000000}s (based on reference clock)")
 
@@ -80,13 +82,13 @@ def legendAllAxes(*axis):
 # First: Just print the data we have.
 fig, ax1 = plt.subplots()
 ax2 = ax1.twinx()
-ax1.set_xlabel('Sample')
+ax1.set_xlabel('Time [s]')
 ax1.set_ylabel('Period [us]')
-ax1.plot(period, 'green', label='Period')
+ax1.plot(sample_time_s, period, 'green', label='Period')
 if period_smooth:
-    ax1.plot(period_smooth, 'lightgreen')
+    ax1.plot(sample_time_s, period_smooth, 'lightgreen')
 ax2.set_ylabel('Temperature [Celsius]')
-ax2.plot(temp, 'darkred', label='Temperature')
+ax2.plot(sample_time_s,temp, 'darkred', label='Temperature')
 legendAllAxes(ax1, ax2)
 plt.ticklabel_format(style='plain')
 plt.title("Measurement data")
@@ -141,34 +143,56 @@ plt.title("Correlation Data")
 
 estimated_period = period_fit(temp)
 difference_period = estimated_period - period
+cumulative_difference = np.cumsum(np.array(difference_period))
 corrected_period_std = printStdDev("Corrected Period", difference_period, sample_mean=np.mean(period))
 
 improvement_ratio = uncorrected_period_std / corrected_period_std
 print (f"With linear fit for period estimation, we got an improvement factor of {improvement_ratio}.")
-print (f"Hypothetical drift with given correction in this specific dataset: {(np.sum(difference_period) * avg_duration_of_sample_us) / 1000000} seconds")
+print (f"Hypothetical drift with given correction in this specific dataset: {(cumulative_difference[-1] * avg_duration_of_sample_us) / 1000000} seconds")
 
 fig, ax1 = plt.subplots()
+plt.title("Correction Factor Estimation")
 ax2 = ax1.twinx()
-ax1.set_xlabel('Sample Number')
+ax1.set_xlabel('Time [s]')
 ax1.set_ylabel('Period [us]')
-ax1.plot(period, 'green', label="Measured Period")
-ax1.plot(estimated_period, 'red', label="Estimated Period")
+ax1.plot(sample_time_s, period, 'green', label="Measured Period")
+ax1.plot(sample_time_s, estimated_period, 'red', label="Estimated Period")
 
 ax2.set_ylabel('Difference [us]')
-ax2.plot(difference_period,
+ax2.plot(sample_time_s, difference_period,
          'blue', label='Difference')
 ax2.axhline(0, linestyle='dashed', color='lightblue', alpha=.5)
-ax2.fill_between(ax2.lines[0].get_xdata(), difference_period, 0,
+ax2.fill_between(sample_time_s, difference_period, 0,
           color='blue', alpha=.5)
 
 # unten, oben = ax2.get_ylim()
-yoffs = 0# unten
-ax2.plot(abs(difference_period)+yoffs,
-          color='teal', alpha=.25, label="Difference (abs)")
+# yoffs = 0# unten
+# ax2.plot(sample_time_s, abs(difference_period)+yoffs,
+#           color='teal', alpha=.25, label="Difference (abs)")
 # reset ylim to have difference really touching bottom
 # ax2.set_ylim((unten, oben))
-
 legendAllAxes(ax1, ax2)
-plt.title("Correction Factor Estimation")
-plt.show()
 
+
+# This is TODO...
+# We can actually correlate the temperature change speed with the correction error!
+
+temperature_change = np.diff(temp)
+temperature_change_rate = temperature_change / np.array(dataframe[data.TABLE_FORMAT['period'].name])[:1]
+smoothed_temp_change_rate = savgol_filter(temperature_change_rate, 500, 2)
+
+fig, ax1 = plt.subplots()
+ax2 = ax1.twinx()
+plt.title("Drift Evaluation")
+plt.xlabel('Time [s]')
+ax1.set_ylabel('Difference [us]')
+ax2.set_ylabel('Temperature change rate [Celsius / s]')
+ax1.plot(sample_time_s, difference_period,
+         label='Difference from Reference', color='green')
+ax2.plot(sample_time_s[1:], smoothed_temp_change_rate,
+         label='Temperature change (filtered)', color="red")
+legendAllAxes(ax1, ax2)
+
+
+
+plt.show()
