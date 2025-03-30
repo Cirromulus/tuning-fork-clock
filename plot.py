@@ -49,6 +49,11 @@ for colname, desc in data.TABLE_FORMAT.items():
 period = columns['period']
 temp = columns['temperature']
 
+duration_of_measurement_us = np.sum(dataframe[data.TABLE_FORMAT['period'].name])
+avg_duration_of_sample_us = duration_of_measurement_us / len(dataframe)
+print (f"Duration of measurement: {duration_of_measurement_us / 1000000}s (based on reference clock)")
+
+
 def printStdDev(name, thing, sample_mean = None):
     std, mean = (np.std(thing), np.mean(thing))
     seconds_per_day = 24 * 60 * 60
@@ -140,6 +145,7 @@ corrected_period_std = printStdDev("Corrected Period", difference_period, sample
 
 improvement_ratio = uncorrected_period_std / corrected_period_std
 print (f"With linear fit for period estimation, we got an improvement factor of {improvement_ratio}.")
+print (f"Hypothetical drift with given correction in this specific dataset: {(np.sum(difference_period) * avg_duration_of_sample_us) / 1000000} seconds")
 
 fig, ax1 = plt.subplots()
 ax2 = ax1.twinx()
