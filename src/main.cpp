@@ -123,8 +123,13 @@ int main() {
 
         if (shouldSampleEnvironment)
         {
-            lastEnvironmentSample = bme.readEnvironment();
-            shouldSampleEnvironment = false;
+            // TODO: Only if read was successful!
+            const auto maybeCurrentEnv = bme.readEnvironment();
+            if (maybeCurrentEnv)
+            {
+                lastEnvironmentSample = *maybeCurrentEnv;
+                shouldSampleEnvironment = false;
+            }
         }
 
         if (oscCount > expectedMaxCount)
@@ -141,7 +146,7 @@ int main() {
 
             status.expectedFrequency();
 
-            const auto env = lastEnvironmentSample.value_or(BME280::EnvironmentMeasurement{-666,0,0});
+            const auto env = lastEnvironmentSample.value_or(BME280::EnvironmentMeasurement{-66666,0,0});
 
             // estimator polynom is based on unnormalized data
             const double estimatedPeriod_us = estimator.estimate(env.temperature_centidegree);

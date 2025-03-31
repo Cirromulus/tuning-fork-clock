@@ -15,7 +15,7 @@ def readCsv(filename) -> pd.DataFrame:
 def readSqlite(filename) -> pd.DataFrame:
     con = sq.connect(f"file:{filename}?mode=ro", uri=True)
     plausibility_filters = [
-        f"{data.TABLE_FORMAT['temperature'].name} != 0", # TODO: Better indication of a failed temperature measurement
+        f"{data.TABLE_FORMAT['temperature'].name} > -100", # TODO: Better indication of a failed temperature measurement
         f"{data.TABLE_FORMAT['period'].name} > {data.TABLE_FORMAT['period'].denormalize(2250)}",    # Ugly AF. Should do a difference-between-samples instead
     ]
     query = "SELECT * from logdata WHERE " + ' AND '.join(plausibility_filters)
