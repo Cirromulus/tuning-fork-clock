@@ -59,6 +59,7 @@ try:
             numrows = db_con.execute(f"SELECT COUNT(1) from {data.TABLE_NAME}").fetchone()[0]
             print (f"\rCurrently collected {numrows} samples.", end='')
             print (f" Current estimate diff: {elements[-1]} us", end='')
+            db.commit()  # Also, commit while we are at it
             lastprint = datetime.now()
 except KeyboardInterrupt:
     print("Exceptional stuff")
