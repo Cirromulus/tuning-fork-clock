@@ -15,7 +15,7 @@ def readCsv(filename) -> pd.DataFrame:
 def readSqlite(filename) -> pd.DataFrame:
     con = sq.connect(f"file:{filename}?mode=ro", uri=True)
     plausibility_filters = [
-        f"{data.TABLE_FORMAT['temperature'].name} > -100", # TODO: Better indication of a failed temperature measurement
+        f"{data.TABLE_FORMAT['temperature'].name} > -6", # TODO: Better indication of a failed temperature measurement
         f"{data.TABLE_FORMAT['period'].name} > {data.TABLE_FORMAT['period'].denormalize(2250)}",    # Ugly AF. Should do a difference-between-samples instead
     ]
     query = "SELECT * from logdata WHERE " + ' AND '.join(plausibility_filters)
@@ -55,6 +55,14 @@ duration_of_measurement_us = sample_time_us[-1]
 avg_duration_of_sample_us = duration_of_measurement_us / len(dataframe)
 print (f"Duration of measurement run: {duration_of_measurement_us / 1000000}s (based on reference clock)")
 
+def dampen(factor, xs, time_delta):
+    rolling_value = xs[0]
+    ret = []
+    for x, delta in zip(xs, time_delta):
+        diff = x - rolling_value
+        rolling_value += diff * factor * delta
+        ret.append(rolling_value)
+    return ret
 
 def printStdDev(name, thing, sample_mean = None):
     std, mean = (np.std(thing), np.mean(thing))
@@ -73,6 +81,12 @@ def legendAllAxes(*axis):
     axis[0].legend(lines, labs)
 
 if args.emit_plot:
+    damped_temperatures = {}
+    steps = 50
+    for i in range(0, steps):
+        factor = i / steps 
+        damped_temperatures[factor] = dampen(factor, temp, period / 1000000)
+
     # First: Just print the data we have.
     fig, ax1 = plt.subplots()
     ax2 = ax1.twinx()
@@ -81,12 +95,30 @@ if args.emit_plot:
     ax1.plot(sample_time_s, period, 'green', label='Period')
     ax2.set_ylabel('Temperature [Celsius]')
     ax2.plot(sample_time_s,temp, 'darkred', label='Temperature')
+    for factor, damped_temp in damped_temperatures.items():
+        ax2.plot(sample_time_s,damped_temp, color=f'#{int(factor * 0xFF):02x}{int((1-factor) * 0xFF):02x}112A')
     legendAllAxes(ax1, ax2)
     plt.ticklabel_format(style='plain')
     plt.title("Measurement data")
-
+    # plt.show()
 
 # Now: Try to find a correlation
+            # from scipy import signal
+            # import numpy as np
+            # import matplotlib.pyplot as plt
+
+            # def f(x,A,t,mu,sigma):
+            #     y1 = A*np.exp(-x/t)
+            #     y2 = A*np.exp(-0.5*(x-mu)**2/sigma**2)
+            #     return signal.convolve(y1,y2)/ sum(y2)
+
+            # x = np.arange(-10,10,0.01)
+
+            # from scipy.optimize import curve_fit
+            # popt, pcov = curve_fit(f, x_data, y_data, 'same')
+
+perhaps_best_damp_factor = .9
+perhaps_best_temp = dampen(perhaps_best_damp_factor, temp, period / 1000000)
 
 def getRangeAndBin(name):
     range = (min(columns[name]) - 1, max(columns[name]) + 1)
@@ -117,18 +149,26 @@ print ("Unscaled data: ")
 # TODO: this could be directly separate without the whole plot stuff.
 fit(dataframe[data.TABLE_FORMAT['temperature'].name], dataframe[data.TABLE_FORMAT['period'].name], 1)
 
-
 if args.emit_plot:
     valid_period_fit_range = np.arange(temp_range[0], temp_range[1], data.TABLE_FORMAT['temperature'].fractional)
+
+    # limit scattering to less samples to reduce time overhead
+    num_samples_to_scatter = min(100, len(period))
+    ss_step_size = int(len(period) / num_samples_to_scatter)
+    period_ss = period[0::ss_step_size]
+    print(f"subsampling for scatterplot to {len(period_ss)} elements")
 
     plt.figure()
     plt.hist2d(temp, period,
             range=(temp_range, period_range),
             bins=(int(temp_bin), int(period_bin)),
             )
-    plt.scatter(temp, period,
+    plt.scatter(temp[0::ss_step_size], period_ss,
                 alpha=.15,
                 label="Measured samples")
+    plt.scatter(perhaps_best_temp[0::ss_step_size], period_ss,
+                alpha=.15, color="lightgreen", label=f"Damping of {perhaps_best_damp_factor}")
+
     plt.plot(valid_period_fit_range, period_fit(valid_period_fit_range),
             'red', label="Best fit")
 
@@ -137,6 +177,8 @@ if args.emit_plot:
     plt.xlabel('Temperature [Celsius]')
     plt.ylabel('Cycle Period [us]')
     plt.title("Correlation Data")
+plt.show()
+exit()
 
 # OK, and apply inverse of cerrelation to try linearize period
 
