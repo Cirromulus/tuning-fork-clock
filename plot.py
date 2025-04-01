@@ -58,11 +58,29 @@ print (f"Duration of measurement run: {duration_of_measurement_us / 1000000}s (b
 def dampen(factor, xs, time_delta):
     rolling_value = xs[0]
     ret = []
-    for x, delta in zip(xs, time_delta):
+    for x, td in zip(xs, time_delta):
         diff = x - rolling_value
-        rolling_value += diff * factor * delta
+        # I am too dumb to get the units correct.
+        # Assume that the time delta is somewhat in there.
+        # This means, after fitting, having the same sample rate is
+        # pretty important to a correct function.
+        rolling_value += diff * factor
         ret.append(rolling_value)
     return ret
+
+# plt.figure()
+# n = 5
+# delta = .5
+# for i in range(0, n):
+#     f = i / n
+#     delta = np.arange(0, 1, .1)
+#     factors = [scaleFactor(f, s) for s in delta]
+#     print (delta)
+#     print (factors)
+#     plt.plot(delta, factors, label=str(f))
+# plt.legend()
+# plt.show()
+# exit()
 
 def printStdDev(name, thing, sample_mean = None):
     std, mean = (np.std(thing), np.mean(thing))
@@ -77,15 +95,20 @@ uncorrected_period_std = printStdDev("period", period)
 
 def legendAllAxes(*axis):
     lines = [line for ax in axis for line in ax.get_lines()]
-    labs = [l.get_label() for l in lines]
+    labs = [l.get_label() for l in lines if not '_' in l.get_label() ]
     axis[0].legend(lines, labs)
 
 if args.emit_plot:
-    damped_temperatures = {}
+    damped_temperatures = []
     steps = 50
+    interest_max = .5
+    scaled_interest_bounds = (.015, .001)
+    def factorScaled(f):
+        return pow(f, 5)
     for i in range(0, steps):
-        factor = i / steps 
-        damped_temperatures[factor] = dampen(factor, temp, period / 1000000)
+        lin_f = interest_max * ((i+1) / steps)
+        factor = factorScaled(lin_f)
+        damped_temperatures += [(lin_f, factor, dampen(factor, temp, period / 1000000))]
 
     # First: Just print the data we have.
     fig, ax1 = plt.subplots()
@@ -94,13 +117,17 @@ if args.emit_plot:
     ax1.set_ylabel('Period [us]')
     ax1.plot(sample_time_s, period, 'green', label='Period')
     ax2.set_ylabel('Temperature [Celsius]')
-    ax2.plot(sample_time_s,temp, 'darkred', label='Temperature')
-    for factor, damped_temp in damped_temperatures.items():
-        ax2.plot(sample_time_s,damped_temp, color=f'#{int(factor * 0xFF):02x}{int((1-factor) * 0xFF):02x}112A')
+    ax2.plot(sample_time_s, temp, 'darkred', label='Temperature')
+    for (lin_f, factor, damped_temp) in damped_temperatures:
+        if factor > min(scaled_interest_bounds) and factor < max(scaled_interest_bounds):
+            ax2.plot(sample_time_s,damped_temp,
+                color=f'#{int(lin_f * 0xFF):02x}{int((1-lin_f) * 0xFF):02x}112A', label=str(factor))
     legendAllAxes(ax1, ax2)
     plt.ticklabel_format(style='plain')
     plt.title("Measurement data")
-    # plt.show()
+
+# plt.show()
+# exit()
 
 # Now: Try to find a correlation
             # from scipy import signal
@@ -117,14 +144,8 @@ if args.emit_plot:
             # from scipy.optimize import curve_fit
             # popt, pcov = curve_fit(f, x_data, y_data, 'same')
 
-perhaps_best_damp_factor = .9
+perhaps_best_damp_factor = .0025
 perhaps_best_temp = dampen(perhaps_best_damp_factor, temp, period / 1000000)
-
-def getRangeAndBin(name):
-    range = (min(columns[name]) - 1, max(columns[name]) + 1)
-    resolution = data.TABLE_FORMAT[name].denormalize(1)
-    bin = max(1, (range[1] - range[0]) * resolution)
-    return (range, bin)
 
 def fit(x, y, order):
     fit, cov = np.polyfit(x, y, order, cov=True)
@@ -138,22 +159,30 @@ def fit(x, y, order):
     print (cov)
     return np.poly1d(fit)
 
-period_range, period_bin = getRangeAndBin('period')
-temp_range, temp_bin = getRangeAndBin('temperature')
-# print (f"Period range: {period_range} -> bin {period_bin}")
-# print (f"Temp range  : {temp_range} -> bin {temp_bin}")
-
 print ("On scaled data:")
 period_fit = fit(temp, period, 2)  # We expect a linear relationship, but let's add a factor
+print (f"On damped data ({perhaps_best_damp_factor}):")
+period_damped_fit = fit(perhaps_best_temp, period, 2)  # We expect a linear relationship, but let's add a factor
 print ("Unscaled data: ")
 # TODO: this could be directly separate without the whole plot stuff.
 fit(dataframe[data.TABLE_FORMAT['temperature'].name], dataframe[data.TABLE_FORMAT['period'].name], 1)
 
-if args.emit_plot:
+
+if args.emit_plot and False:
+    def getRangeAndBin(name):
+        range = (min(columns[name]) - 1, max(columns[name]) + 1)
+        resolution = data.TABLE_FORMAT[name].denormalize(1)
+        bin = max(1, (range[1] - range[0]) * resolution)
+        return (range, bin)
+
+    period_range, period_bin = getRangeAndBin('period')
+    temp_range, temp_bin = getRangeAndBin('temperature')
+    # print (f"Period range: {period_range} -> bin {period_bin}")
+    # print (f"Temp range  : {temp_range} -> bin {temp_bin}")
     valid_period_fit_range = np.arange(temp_range[0], temp_range[1], data.TABLE_FORMAT['temperature'].fractional)
 
     # limit scattering to less samples to reduce time overhead
-    num_samples_to_scatter = min(100, len(period))
+    num_samples_to_scatter = min(1000, len(period))
     ss_step_size = int(len(period) / num_samples_to_scatter)
     period_ss = period[0::ss_step_size]
     print(f"subsampling for scatterplot to {len(period_ss)} elements")
@@ -177,13 +206,14 @@ if args.emit_plot:
     plt.xlabel('Temperature [Celsius]')
     plt.ylabel('Cycle Period [us]')
     plt.title("Correlation Data")
-plt.show()
-exit()
+
 
 # OK, and apply inverse of cerrelation to try linearize period
 
 estimated_period = period_fit(temp)
+estimated_period_damped_fit = period_damped_fit(perhaps_best_temp)
 difference_period = estimated_period - period
+difference_period_damped_fit = estimated_period_damped_fit - period
 cumulative_difference = np.cumsum(np.array(difference_period))
 corrected_period_std = printStdDev("Corrected Period", difference_period, sample_mean=np.mean(period))
 
@@ -198,11 +228,14 @@ if args.emit_plot:
     ax1.set_xlabel('Time [s]')
     ax1.set_ylabel('Period [us]')
     ax1.plot(sample_time_s, period, 'green', label="Measured Period")
-    ax1.plot(sample_time_s, estimated_period, 'red', label="Estimated Period")
+    ax1.plot(sample_time_s, estimated_period, 'darkred', label="Estimated Period")
+    ax1.plot(sample_time_s, estimated_period_damped_fit, 'orange', label="Estimated Period (Damped)")
 
     ax2.set_ylabel('Difference [us]')
     ax2.plot(sample_time_s, difference_period,
             'blue', label='Difference')
+    ax2.plot(sample_time_s, difference_period_damped_fit,
+            'teal', label='Difference (Damped)')
     ax2.axhline(0, linestyle='dashed', color='lightblue', alpha=.5)
     ax2.fill_between(sample_time_s, difference_period, 0,
             color='blue', alpha=.5)
