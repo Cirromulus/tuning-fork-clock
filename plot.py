@@ -71,7 +71,6 @@ def legendAllAxes(*axis):
     labs = [l.get_label() for l in lines if not '_' in l.get_label() ]
     axis[0].legend(lines, labs)
 
-
 def dampen(factor, xs, time_delta = None):
     rolling_value = xs[0]
     ret = []
@@ -171,7 +170,7 @@ if args.emit_plot:
 
 damped_temperatures = []
 steps = 15
-scaled_interest_bounds = (.015, .001)   # Hm, less manual please
+scaled_interest_bounds = (.015, .0001)   # Hm, less manual please
 def factorScaled(f):
     return pow(f, 3)
 for i in range(0, steps):
