@@ -100,14 +100,14 @@ def legendAllAxes(*axis):
 
 if args.emit_plot:
     damped_temperatures = []
-    steps = 50
-    interest_max = .5
+    steps = 10
     scaled_interest_bounds = (.015, .001)
     def factorScaled(f):
-        return pow(f, 5)
+        return pow(f, 3)
     for i in range(0, steps):
-        lin_f = interest_max * ((i+1) / steps)
-        factor = factorScaled(lin_f)
+        lin_f = 1 * ((i+1) / steps)
+        factor = min(scaled_interest_bounds) + max(scaled_interest_bounds) * factorScaled(lin_f)
+        print (f"Factor {lin_f}: {factor}")
         damped_temperatures += [(lin_f, factor, dampen(factor, temp, period / 1000000))]
 
     # First: Just print the data we have.
@@ -121,8 +121,9 @@ if args.emit_plot:
     for (lin_f, factor, damped_temp) in damped_temperatures:
         if factor > min(scaled_interest_bounds) and factor < max(scaled_interest_bounds):
             ax2.plot(sample_time_s,damped_temp,
-                color=f'#{int(lin_f * 0xFF):02x}{int((1-lin_f) * 0xFF):02x}112A', label=str(factor))
-    legendAllAxes(ax1, ax2)
+                color=f'#{int(lin_f * 0xFF):02x}{int((1-lin_f) * 0xFF):02x}115A', label=str(factor))
+    ax1.legend(loc="upper right")
+    ax2.legend(loc="upper left")
     plt.ticklabel_format(style='plain')
     plt.title("Measurement data")
 
@@ -144,7 +145,7 @@ if args.emit_plot:
             # from scipy.optimize import curve_fit
             # popt, pcov = curve_fit(f, x_data, y_data, 'same')
 
-perhaps_best_damp_factor = .0025
+perhaps_best_damp_factor = .0019
 perhaps_best_temp = dampen(perhaps_best_damp_factor, temp, period / 1000000)
 
 def fit(x, y, order):
@@ -168,7 +169,7 @@ print ("Unscaled data: ")
 fit(dataframe[data.TABLE_FORMAT['temperature'].name], dataframe[data.TABLE_FORMAT['period'].name], 1)
 
 
-if args.emit_plot and False:
+if args.emit_plot:
     def getRangeAndBin(name):
         range = (min(columns[name]) - 1, max(columns[name]) + 1)
         resolution = data.TABLE_FORMAT[name].denormalize(1)
@@ -194,12 +195,14 @@ if args.emit_plot and False:
             )
     plt.scatter(temp[0::ss_step_size], period_ss,
                 alpha=.15,
-                label="Measured samples")
+                label="Measured samples", color="blue")
     plt.scatter(perhaps_best_temp[0::ss_step_size], period_ss,
                 alpha=.15, color="lightgreen", label=f"Damping of {perhaps_best_damp_factor}")
 
     plt.plot(valid_period_fit_range, period_fit(valid_period_fit_range),
             'red', label="Best fit")
+    plt.plot(valid_period_fit_range, period_damped_fit(valid_period_fit_range),
+            'teal', label="Best fit (damped)")
 
     plt.legend()
     plt.ticklabel_format(style='plain')
@@ -256,7 +259,7 @@ temperature_change = np.diff(temp)
 temperature_change_rate = temperature_change / np.array(dataframe[data.TABLE_FORMAT['period'].name])[:1]
 smoothed_temp_change_rate = savgol_filter(temperature_change_rate, 500, 2)
 
-if args.emit_plot:
+if args.emit_plot and False:
     fig, ax1 = plt.subplots()
     ax2 = ax1.twinx()
     plt.title("Drift Evaluation")
