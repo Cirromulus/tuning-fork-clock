@@ -39,18 +39,18 @@ static_assert(std::numeric_limits<OscCount>::max() > expectedMaxCount);
 
 /*
  * The lastest run:
- On damped data (0.002626624422360645):
- Factors of best fit: f(x) = 987938.3857636167x^0 + 1.5652514138478073x^1 + -5.585329066394693e-05x^2
+ On damped data (0.002279174504551375):
+ Factors of best fit: f(x) = 987958.2603574242x^0 + 1.5367473577982667x^1 + -4.597156613378032e-05x^2
  */
 
 // The following values are taken from plot.py calculations. DIY if you want to change that.
 static constexpr std::array temperatureCalibrationPolynom {
-    987938.3857636167,      // Could be seen as "average"
-    1.5652514138478073      // Can be seen as temperature depencence
-    -5.585329066394693e-05, // "nonlinearity" of temperature dependence
+    987958.2603574242,      // Could be seen as "average"
+    1.5367473577982667      // Can be seen as temperature depencence
+    -4.597156613378032e-05, // "nonlinearity" of temperature dependence
 };
 
 // This is not calibrated against an actual time difference,
 // but instead was "trained" on the average sample time.
 // FIXME: This value might be too small to actually affect calc
-static constexpr double dampFactor {0.002626624422360645};
+static constexpr double dampFactor {0.002279174504551375};

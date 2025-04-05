@@ -42,12 +42,13 @@ struct Damper
     double
     dampenCycle(const double& value)
     {
-        const double previousValue = mRollingEstimate.value_or(value)
+        const double previousValue = mRollingEstimate.value_or(value);
         const double diff = value - previousValue;
         mRollingEstimate = previousValue + diff * mDampFactor;
+        return *mRollingEstimate;
     }
 
 private:
     std::optional<double> mRollingEstimate;
     double mDampFactor;
-}
+};
