@@ -6,7 +6,7 @@ import pandas as pd
 import sqlite3 as sq
 from argparse import ArgumentParser
 import data # definitions
-from scipy.signal import savgol_filter, argrelextrema
+from scipy.signal import savgol_filter, argrelextrema, find_peaks
 
 
 def readCsv(filename) -> pd.DataFrame:
@@ -88,19 +88,23 @@ def dampen(factor, xs, time_delta = None):
         ret.append(rolling_value)
     return ret
 
-a_smooth_number = 200   # Unit is "samples" I think
 def goodSavgolBecauseILookedAtItHard(x):
-    return savgol_filter(x, a_smooth_number, 2)
+    a_smooth_number = 50   # probably "samples"
+    return savgol_filter(x, a_smooth_number, 1)
 
-def getExtrema(thing, extra_smooth = True):
-    maxima = argrelextrema(thing, np.greater, order=a_smooth_number)
-    minima = argrelextrema(thing, np.less, order=a_smooth_number)
-    # print (maxima)
+def getExtrema(thing):
+    min_expected_peak_distance = 60 # FIXME: Normalize with sample density
+    maxima = find_peaks(thing,
+                        distance=min_expected_peak_distance,
+                        width=min_expected_peak_distance)
+    minima = find_peaks(-thing, # negated!
+                        distance=min_expected_peak_distance,
+                        width=min_expected_peak_distance)
     return (maxima[0], minima[0])
 
 def printExtrema(hansbob, name):
     print (f"Found {len(hansbob[0])}, {len(hansbob[1])} extrema for {name}")
-    print (f"  First some maxima: {hansbob[0][:5]}")
+    print (f"  First few maxima: {hansbob[0][:5]}")
 
 def correlateExtrema(left_i, right_i, sample_time, max_diff):
     r_o = 0   # offset from right_i
@@ -137,21 +141,23 @@ def correlateMinMax(left, right, time, max_diff_s):
 
 def getPhaseLatency(left, right, sample_time, window):
     left_extrema = getExtrema(left)
+    # print (f"left: {left_extrema}")
     right_extrema = getExtrema(right)
+    # print (f"right: {right_extrema}")
     common_temp_extrema, common_period_extrema, common_time_diffs = correlateMinMax(left_extrema, right_extrema, sample_time, window)
     return (np.array(common_time_diffs).mean(), common_temp_extrema, common_period_extrema, common_time_diffs)
 
-# TODO: Calculate with actual measured temperature!
 temp_smooth = goodSavgolBecauseILookedAtItHard(temp)
-# printExtrema(getExtrema(temp_smooth), "temp")
 period_smooth = goodSavgolBecauseILookedAtItHard(period)
-# printExtrema(getExtrema(period_smooth), "period")
-
-# # for testing_ limit ti one element
+# # for testing, limit to one element:
 # temp_extrema = (temp_extrema[0][:1],temp_extrema[1][:1])
 # period_extrema = (period_extrema[0][:1],period_extrema[1][:1])
 
 probably_not_slower_than = 80 #s
+# I think that if time and period are smoothed by the same amount,
+# then the average time difference is not affected by the smoothing?
+# Unfortunately, the a smoothed version is necessary for the
+# argrelextrema function to work properly
 base_latency_s, common_temp_extrema, common_period_extrema, common_time_diffs = getPhaseLatency(temp_smooth, period_smooth, sample_time_s, probably_not_slower_than)
 def getAvgPhaseLatencyAgainstPeriod(input_curve):
     return getPhaseLatency(input_curve, period_smooth, sample_time_s, probably_not_slower_than)[0]
@@ -161,10 +167,11 @@ def getAvgPhaseLatencyAgainstPeriod(input_curve):
 # printExtrema(common_period_extrema, "common_period")
 print (f"mean time difference of period reacting on measured period: {base_latency_s}s")
 
-if args.emit_plot and False: # this was not too helpful
+if args.emit_plot:# and False: # this is not too helpful
     plt.figure()
     plt.hist(common_time_diffs, probably_not_slower_than, label="Extrema")
     plt.axvline(base_latency_s, color="red", label="Mean", linestyle="dotted")
+    plt.axvline(np.median(common_time_diffs), color="blue", label="Median", linestyle="dotted")
     plt.xlabel("Time difference [s]")
     plt.ylabel("Num occurrences")
     plt.legend()
@@ -175,7 +182,7 @@ if args.emit_plot and False: # this was not too helpful
 
 damped_temperatures = []
 steps = 15
-scaled_interest_bounds = (.02, .0002)   # Hm, less manual please
+scaled_interest_bounds = (.01, .001)   # Hm, less manual please
 def factorScaled(f):
     return pow(f, 3)
 for i in range(0, steps):
@@ -192,6 +199,7 @@ if args.emit_plot:
     fig, ax1 = plt.subplots()
     ax2 = ax1.twinx()
     ax1.set_xlabel('Time [s]')
+    ax1.ticklabel_format(style='plain')
     ax1.set_ylabel('Period per cycle [us]')
     ax1.plot(sample_time_s, period_meta.normalize(period), 'orange', alpha=.7, label='Period')
     ax1.plot(sample_time_s, period_meta.normalize(period_smooth), 'orangered', alpha=.7, label='Period (Smooth)')
@@ -219,7 +227,6 @@ if args.emit_plot:
                 )
     ax1.legend(loc="upper right")
     ax2.legend(loc="upper left")
-    plt.ticklabel_format(style='plain')
     plt.title("Measurement data")
 
 # plt.show()
