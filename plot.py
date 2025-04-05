@@ -40,16 +40,19 @@ print ("Estimated covariance between columns:")
 print (dataframe.cov())
 print ()
 
-
-columns = {}
-for colname, desc in data.TABLE_FORMAT.items():
-    columns[colname] = desc.normalize(dataframe[desc.name])
+# TODO: THis is useful for only plotting, but we also calculate.
+# TODO Split.
+# columns = {}
+# for colname, desc in data.TABLE_FORMAT.items():
+#     columns[colname] = desc.normalize(dataframe[desc.name])
 
 # dumb aliases
-period = columns['period']
-temp = columns['temperature']
+period = dataframe[data.TABLE_FORMAT['period'].name]
+period_meta = data.TABLE_FORMAT['period']
+temp = dataframe[data.TABLE_FORMAT['temperature'].name]
+temp_meta = data.TABLE_FORMAT['temperature']
 
-sample_time_us = np.cumsum(np.array(dataframe[data.TABLE_FORMAT['period'].name]))
+sample_time_us = np.cumsum(np.array(period))
 sample_time_s = sample_time_us / 10000000
 duration_of_measurement_us = sample_time_us[-1]
 avg_duration_of_sample_us = duration_of_measurement_us / len(dataframe)
@@ -64,7 +67,7 @@ def printStdDev(name, thing, sample_mean = None):
     print (f"Standard deviation of the {name}: {std} us (mean {mean}) -> {std * seconds_per_day / sample_mean} s / day")
     return std
 
-uncorrected_period_std = printStdDev("period", period)
+uncorrected_period_std = printStdDev("period", period_meta.normalize(period))
 
 def legendAllAxes(*axis):
     lines = [line for ax in axis for line in ax.get_lines()]
@@ -80,11 +83,12 @@ def dampen(factor, xs, time_delta = None):
         # Assume that the time delta is somewhat in there.
         # This means, after fitting, having the same sample rate is
         # pretty important to a correct function.
+        # Hmm, perhaps 1-(1/(1+x^2))?
         rolling_value += diff * factor
         ret.append(rolling_value)
     return ret
 
-a_smooth_number = 200
+a_smooth_number = 200   # Unit is "samples" I think
 def goodSavgolBecauseILookedAtItHard(x):
     return savgol_filter(x, a_smooth_number, 2)
 
@@ -137,6 +141,7 @@ def getPhaseLatency(left, right, sample_time, window):
     common_temp_extrema, common_period_extrema, common_time_diffs = correlateMinMax(left_extrema, right_extrema, sample_time, window)
     return (np.array(common_time_diffs).mean(), common_temp_extrema, common_period_extrema, common_time_diffs)
 
+# TODO: Calculate with actual measured temperature!
 temp_smooth = goodSavgolBecauseILookedAtItHard(temp)
 # printExtrema(getExtrema(temp_smooth), "temp")
 period_smooth = goodSavgolBecauseILookedAtItHard(period)
@@ -156,7 +161,7 @@ def getAvgPhaseLatencyAgainstPeriod(input_curve):
 # printExtrema(common_period_extrema, "common_period")
 print (f"mean time difference of period reacting on measured period: {base_latency_s}s")
 
-if args.emit_plot:
+if args.emit_plot and False: # this was not too helpful
     plt.figure()
     plt.hist(common_time_diffs, probably_not_slower_than, label="Extrema")
     plt.axvline(base_latency_s, color="red", label="Mean", linestyle="dotted")
@@ -170,7 +175,7 @@ if args.emit_plot:
 
 damped_temperatures = []
 steps = 15
-scaled_interest_bounds = (.015, .0001)   # Hm, less manual please
+scaled_interest_bounds = (.02, .0002)   # Hm, less manual please
 def factorScaled(f):
     return pow(f, 3)
 for i in range(0, steps):
@@ -181,32 +186,32 @@ for i in range(0, steps):
     avg_delay = getAvgPhaseLatencyAgainstPeriod(damped_curve)
     damped_temperatures += [(lin_f, factor, damped_curve, avg_delay)]
 
-
+# Print temp and period, along with the damping-series
 if args.emit_plot:
     # First: Just print the data we have.
     fig, ax1 = plt.subplots()
     ax2 = ax1.twinx()
     ax1.set_xlabel('Time [s]')
-    ax1.set_ylabel('Period [us]')
-    ax1.plot(sample_time_s, period, 'orange', alpha=.7, label='Period')
-    ax1.plot(sample_time_s, period_smooth, 'orangered', alpha=.7, label='Period (Smooth)')
-    ax1.scatter(sample_time_s[common_period_extrema[0]], period_smooth[common_period_extrema[0]],
+    ax1.set_ylabel('Period per cycle [us]')
+    ax1.plot(sample_time_s, period_meta.normalize(period), 'orange', alpha=.7, label='Period')
+    ax1.plot(sample_time_s, period_meta.normalize(period_smooth), 'orangered', alpha=.7, label='Period (Smooth)')
+    ax1.scatter(sample_time_s[common_period_extrema[0]], period_meta.normalize(period_smooth[common_period_extrema[0]]),
                 s=100, color="red", marker='1', label="Maxima")
-    ax1.scatter(sample_time_s[common_period_extrema[1]], period_smooth[common_period_extrema[1]],
+    ax1.scatter(sample_time_s[common_period_extrema[1]], period_meta.normalize(period_smooth[common_period_extrema[1]]),
                 s=100, color="red", marker='2', label="Minima")
     
-    ax2.set_ylabel('Temperature [Celsius]')
-    ax2.plot(sample_time_s, temp, 'firebrick', alpha=.7, label='Temperature')
-    ax2.plot(sample_time_s, temp_smooth, 'darkred', alpha=.7, label='Temperature (Smooth)')
-    ax2.scatter(sample_time_s[common_temp_extrema[0]], temp_smooth[common_temp_extrema[0]],
+    ax2.set_ylabel('Scaled Temperature [Celsius]')
+    ax2.plot(sample_time_s, temp_meta.normalize(temp), 'firebrick', alpha=.7, label='Temperature')
+    ax2.plot(sample_time_s, temp_meta.normalize(temp_smooth), 'darkred', alpha=.7, label='Temperature (Smooth)')
+    ax2.scatter(sample_time_s[common_temp_extrema[0]], temp_meta.normalize(temp_smooth[common_temp_extrema[0]]),
                 s=100, color="blue", marker='1', label="Maxima")
-    ax2.scatter(sample_time_s[common_temp_extrema[1]], temp_smooth[common_temp_extrema[1]],
+    ax2.scatter(sample_time_s[common_temp_extrema[1]], temp_meta.normalize(temp_smooth[common_temp_extrema[1]]),
                 s=100, color="blue", marker='2', label="Minima")
 
 
     for (lin_f, factor, damped_temp, avg_diff) in damped_temperatures:
         if factor > min(scaled_interest_bounds) and factor < max(scaled_interest_bounds):
-            ax2.plot(sample_time_s,damped_temp,
+            ax2.plot(sample_time_s, temp_meta.normalize(damped_temp),
                 color=f'#{int(lin_f * 0xFF):02x}{int((1-lin_f) * 0xFF):02x}115A',
                 #label=f"{factor}: {avg_diff}"
                 # label="Damped Temperature"
@@ -216,6 +221,9 @@ if args.emit_plot:
     ax2.legend(loc="upper left")
     plt.ticklabel_format(style='plain')
     plt.title("Measurement data")
+
+# plt.show()
+# exit()
 
 # Now: Grade the factors by min(abs(diff))
 factors = [factor for (_, factor, _, avg_diff) in damped_temperatures]
@@ -253,8 +261,12 @@ if args.emit_plot:
 
 # plt.show()
 # exit()
+if len(zero_crossings) != 1:
+    print ("We did not find a single zero crossing of best factor fit!")
+    print ("Can't continue. You need to tune hard-coded values, probably...")
+    plt.show()
+    exit()
 
-assert len(zero_crossings) == 1, "I can't even!"
 perhaps_best_damp_factor = zero_crossings[0]
 perhaps_best_temp = np.array(dampen(perhaps_best_damp_factor, temp, period / 1000000))
 
@@ -275,51 +287,48 @@ print ("On scaled data:")
 period_fit = fit(temp, period, fit_degree)
 print (f"On damped data ({perhaps_best_damp_factor}):")
 period_damped_fit = fit(perhaps_best_temp, period, fit_degree)
-print ("Unscaled data: ")
-# TODO: this could be directly separate without the whole plot stuff.
-damped_unnormalized = np.array(dampen(perhaps_best_damp_factor, dataframe[data.TABLE_FORMAT['temperature'].name], dataframe[data.TABLE_FORMAT['period'].name]))
-fit(damped_unnormalized, dataframe[data.TABLE_FORMAT['period'].name], fit_degree)
 
-
+# THe scatter-plot. Watch out, it takes some time.
 if args.emit_plot:
-    def getRangeAndBin(name):
-        range = (min(columns[name]) - 1, max(columns[name]) + 1)
-        resolution = data.TABLE_FORMAT[name].denormalize(1)
+    def getNormalizedRangeAndBin(thing, thing_meta):
+        range = (min(thing_meta.normalize(thing)) - 1, max(thing_meta.normalize(thing)) + 1)
+        resolution = 2 # thing_meta.normalize(1) # because we don't need that many bins
         bin = max(1, (range[1] - range[0]) * resolution)
         return (range, bin)
 
-    period_range, period_bin = getRangeAndBin('period')
-    temp_range, temp_bin = getRangeAndBin('temperature')
+    period_range_n, period_bin = getNormalizedRangeAndBin(period, period_meta)
+    temp_range_n, temp_bin = getNormalizedRangeAndBin(temp, temp_meta)
     # print (f"Period range: {period_range} -> bin {period_bin}")
     # print (f"Temp range  : {temp_range} -> bin {temp_bin}")
-    valid_period_fit_range = np.arange(temp_range[0], temp_range[1], data.TABLE_FORMAT['temperature'].fractional)
+    valid_period_fit_range_n = np.arange(temp_range_n[0], temp_range_n[1], temp_meta.normalize(1))
+    valid_period_fit_range = temp_meta.denormalize(valid_period_fit_range_n)
 
     # limit scattering to less samples to reduce time overhead
-    num_samples_to_scatter = min(1000, len(period))
+    num_samples_to_scatter = min(5000, len(period)/2)
     ss_step_size = int(len(period) / num_samples_to_scatter)
     period_ss = period[0::ss_step_size]
     # print(f"subsampling for scatterplot to {len(period_ss)} elements")
 
     plt.figure()
-    plt.hist2d(temp, period,
-            range=(temp_range, period_range),
+    plt.hist2d(temp_meta.normalize(temp), period_meta.normalize(period),
+            range=(temp_range_n, period_range_n),
             bins=(int(temp_bin), int(period_bin)),
             )
-    plt.scatter(temp[0::ss_step_size], period_ss,
+    plt.scatter(temp_meta.normalize(temp[0::ss_step_size]), period_meta.normalize(period_ss),
                 alpha=.15,
                 label="Measured samples", color="blue")
-    plt.scatter(perhaps_best_temp[0::ss_step_size], period_ss,
+    plt.scatter(temp_meta.normalize(perhaps_best_temp[0::ss_step_size]), period_meta.normalize(period_ss),
                 alpha=.15, color="lightgreen", label=f"Damped Temperature")
 
-    plt.plot(valid_period_fit_range, period_fit(valid_period_fit_range),
+    plt.plot(valid_period_fit_range_n, period_meta.normalize(period_fit(valid_period_fit_range)),
             'red', label="Best fit")
-    plt.plot(valid_period_fit_range, period_damped_fit(valid_period_fit_range),
+    plt.plot(valid_period_fit_range_n, period_meta.normalize(period_damped_fit(valid_period_fit_range)),
             'teal', label="Best fit (damped)")
 
     plt.legend()
     plt.ticklabel_format(style='plain')
-    plt.xlabel('Temperature [Celsius]')
-    plt.ylabel('Cycle Period [us]')
+    plt.xlabel('Scaled Temperature [Celsius]')
+    plt.ylabel('Period per one cycle [us]')
     plt.title("Correlation Data")
 
 
@@ -347,18 +356,18 @@ if args.emit_plot:
     plt.title("Correction Factor Estimation")
     ax1.set_xlabel('Time [s]')
     ax2 = ax1.twinx()
-    ax1.set_ylabel('Period [us]')
-    ax1.plot(sample_time_s, period, 'green', label="Measured Period")
-    ax1.plot(sample_time_s, estimated_period_undamped, 'darkred', label="Estimated Period")
-    ax1.plot(sample_time_s, estimated_period_damped, 'orange', label="Estimated Period (Damped)")
+    ax1.set_ylabel('Period per one Cycle [us]')
+    ax1.plot(sample_time_s, period_meta.normalize(period), 'green', label="Measured Period")
+    ax1.plot(sample_time_s, period_meta.normalize(estimated_period_undamped), 'darkred', label="Estimated Period")
+    ax1.plot(sample_time_s, period_meta.normalize(estimated_period_damped), 'orange', label="Estimated Period (Damped)")
 
     ax2.set_ylabel('Difference [us]')
-    ax2.plot(sample_time_s, diff_undamped,
+    ax2.plot(sample_time_s, period_meta.normalize(diff_undamped),
             'blue', label='Difference')
-    ax2.plot(sample_time_s, diff_damped,
+    ax2.plot(sample_time_s, period_meta.normalize(diff_damped),
             'teal', label='Difference (Damped)')
     ax2.axhline(0, linestyle='dashed', color='lightblue', alpha=.5)
-    ax2.fill_between(sample_time_s, diff_damped, 0,
+    ax2.fill_between(sample_time_s, period_meta.normalize(diff_damped), 0,
             color='teal', alpha=.5)
 
     # unten, oben = ax2.get_ylim()

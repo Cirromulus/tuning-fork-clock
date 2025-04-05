@@ -40,6 +40,11 @@ static_assert(std::numeric_limits<OscCount>::max() > expectedMaxCount);
 
 // The following values are taken from plot.py calculations. DIY if you want to change that.
 static constexpr std::array temperatureCalibrationPolynom {
-    988132.8420605109,  // Could be seen as "average"
-    1.3739085137636438  // Can be seen as temperature factor
+    987950.1974292588,  // Could be seen as "average"
+    1.5552094498208062  // Can be seen as temperature factor
 };
+
+// This is not calibrated against an actual time difference,
+// but instead was "trained" on the average sample time.
+// FIXME: This value might be too small to actually affect calc
+static constexpr double dampFactor {0.0024192806472165774};

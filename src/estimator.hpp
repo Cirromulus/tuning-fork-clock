@@ -2,6 +2,7 @@
 
 #include <stddef.h>
 #include <cmath>
+#include <optional>
 
 template <size_t PolyCount>
 class CompensationEstimator
@@ -27,3 +28,26 @@ public:
 private:
     std::array<double, numberOfPolynoms> mPolynoms;
 };
+
+
+struct Damper
+{
+    constexpr
+    Damper(const double& dampFactor)
+        : mRollingEstimate{std::nullopt}, mDampFactor{dampFactor}
+    {
+    }
+
+    constexpr
+    double
+    dampenCycle(const double& value)
+    {
+        const double previousValue = mRollingEstimate.value_or(value)
+        const double diff = value - previousValue;
+        mRollingEstimate = previousValue + diff * mDampFactor;
+    }
+
+private:
+    std::optional<double> mRollingEstimate;
+    double mDampFactor;
+}

@@ -97,7 +97,8 @@ int main() {
     auto lastValidOscSampleTime = get_absolute_time();
     uint64_t estimatedElapsedTime_us = 0;
     constexpr CompensationEstimator estimator{temperatureCalibrationPolynom};
-
+    constexpr Damper tempDamp{dampFactor};
+    
     // is here because of no signal not working on the first occurrence dunno
     status.noSignal();
     while(true)
