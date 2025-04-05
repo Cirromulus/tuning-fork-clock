@@ -53,7 +53,7 @@ void printCsvHeader()
 {
     printf ("Period duration [us / %lu]", periodsPerMeasurement);
     printf (", Temperature [0.01 DegC], Pressure [2^(-8) Pa], Humidity [2^(-10) %RH]");
-    printf (", Current Period Estimation [us], Estimated elapsed time [us]");
+    printf (", Current Temperature Estimation [0.01 DegC], Current Period Estimation [us], Estimated elapsed time [us]");
     printf (", Difference to internal time [us]");
     printf ("\n");
 }
@@ -97,8 +97,8 @@ int main() {
     auto lastValidOscSampleTime = get_absolute_time();
     uint64_t estimatedElapsedTime_us = 0;
     constexpr CompensationEstimator estimator{temperatureCalibrationPolynom};
-    constexpr Damper tempDamp{dampFactor};
-    
+    Damper tempDamp{dampFactor};
+
     // is here because of no signal not working on the first occurrence dunno
     status.noSignal();
     while(true)
@@ -124,7 +124,6 @@ int main() {
 
         if (shouldSampleEnvironment)
         {
-            // TODO: Only if read was successful!
             const auto maybeCurrentEnv = bme.readEnvironment();
             if (maybeCurrentEnv)
             {
@@ -145,12 +144,17 @@ int main() {
         {
             // we effectively skip unexpected samples
 
+            // show status
             status.expectedFrequency();
 
-            const auto env = lastEnvironmentSample.value_or(BME280::EnvironmentMeasurement{-66666,0,0});
+            if (lastEnvironmentSample)
+            {
+                tempDamp.consumeNextCycle(lastEnvironmentSample->temperature_centidegree);
+            }
 
+            const double estimatedTemperature_cdg = tempDamp.getEstimate();
             // estimator polynom is based on unnormalized data
-            const double estimatedPeriod_us = estimator.estimate(env.temperature_centidegree);
+            const double estimatedPeriod_us = estimator.estimate(estimatedTemperature_cdg);
             estimatedElapsedTime_us += llround(estimatedPeriod_us);
 
             if (currentLine >= printHeaderEveryNLines)
@@ -161,12 +165,15 @@ int main() {
 
             printf("%lu", oscCount);
 
-            printf(",%ld,%lu,%lu",
-                env.temperature_centidegree,
-                env.pressure_q23_8,
-                env.humidity_q22_10);
+            {
+                const auto env = lastEnvironmentSample.value_or(BME280::invalidMeasurement);
+                printf(",%ld,%lu,%lu",
+                    env.temperature_centidegree,
+                    env.pressure_q23_8,
+                    env.humidity_q22_10);
+            }
 
-            printf(",%f,%lld", estimatedPeriod_us, estimatedElapsedTime_us);
+            printf(",%f,%f,%lld", estimatedTemperature_cdg, estimatedPeriod_us, estimatedElapsedTime_us);
             printf(",%lld", time_us_64() - estimatedElapsedTime_us);
 
             // now the derived values

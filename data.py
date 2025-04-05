@@ -24,6 +24,7 @@ TABLE_FORMAT = {
     'temperature': ColDesc('Temperature', 'INTEGER', 'Degree Celsius', 0.01),
     'pressure': ColDesc('Pressure', 'INTEGER', 'Pa', 2^-8),
     'humidity': ColDesc('Humidity', 'INTEGER', '%RH', 2^-10),
+    'temperature_damped' : ColDesc('TempDamp', 'INTEGER', 'Degree Celsius', 0.01),
     'period_estimate' : ColDesc('PeriodEstimate', 'INTEGER', 'us', expected_frequency),
     'time_estimate' : ColDesc('TimeEstimate', 'INTEGER', 'us', 1),
     'estimate_diff' : ColDesc('EstimateDiff', 'INTEGER', 'us', 1),

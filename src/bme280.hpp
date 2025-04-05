@@ -45,8 +45,9 @@ public:
         {
             return humidity_q22_10 >> 10;
         }
-
     };
+
+    static constexpr EnvironmentMeasurement invalidMeasurement{-6666, 0, 0};
 
     constexpr BME280(i2c_inst_t* i2c)
     : m_i2c{i2c}, m_tempFineCoefficient{0}

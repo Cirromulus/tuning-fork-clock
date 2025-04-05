@@ -13,15 +13,6 @@ stringcode = 'ascii'
 device = serial.Serial(devicePath, timeout=1)  # don't care for baudrate, is USB currently
 assert(device.is_open)
 
-# TODO: Check against header somehow
-expectedCSVSerialFormat = [
-    "Period [us]",
-    "Temperature [0.01 DegC]",
-    "Pressure [2^(-8) Pa]",
-    "Humidity [2^(-10) %RH]",
-    "Frequency [Hz]"
-]
-
 db_file_name = datetime.today().strftime('%Y-%m-%d_%H-%M-%S') + "_sensor_log.db"
 db = sqlite3.connect(db_file_name)
 db_con = db.cursor()
@@ -44,7 +35,7 @@ try:
             print (f"Got nothing. Is there a OSC LOCK?")
             continue
 
-        if len(elements) < len(expectedCSVSerialFormat):
+        if len(elements) < len(data.TABLE_FORMAT):
             print (f"'{line}' is not of the expected format")
             continue
 
@@ -57,8 +48,8 @@ try:
 
         if datetime.now() > lastprint + PRINT_EVERY:
             numrows = db_con.execute(f"SELECT COUNT(1) from {data.TABLE_NAME}").fetchone()[0]
-            print (f"\rCurrently collected {numrows} samples.", end='')
-            print (f" Current estimate diff: {elements[-1]} us", end='')
+            print (f"\rCurrently collected {numrows} samples.", end=' ')
+            print (f" Current estimate diff: {elements[-1]} us", end=' ')
             db.commit()  # Also, commit while we are at it
             lastprint = datetime.now()
 except KeyboardInterrupt:
