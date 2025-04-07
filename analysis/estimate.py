@@ -24,7 +24,7 @@ def readSqlite(filename) -> pd.DataFrame:
 
 
 parser = ArgumentParser(
-            prog='plot.py',
+            prog='estimate.py',
             description='Plots statistics about data of tuning fork')
 
 parser.add_argument('database')
@@ -207,7 +207,7 @@ if args.emit_plot:
                 s=100, color="red", marker='1', label="Maxima")
     ax1.scatter(sample_time_s[common_period_extrema[1]], period_meta.normalize(period_smooth[common_period_extrema[1]]),
                 s=100, color="red", marker='2', label="Minima")
-    
+
     ax2.set_ylabel('Scaled Temperature [Celsius]')
     ax2.plot(sample_time_s, temp_meta.normalize(temp), 'firebrick', alpha=.7, label='Temperature')
     ax2.plot(sample_time_s, temp_meta.normalize(temp_smooth), 'darkred', alpha=.7, label='Temperature (Smooth)')
@@ -349,7 +349,7 @@ def printStats(estimated_period, period):
     print (f"With linear fit for period estimation, we got an improvement factor of {improvement_ratio}.")
     print (f"Hypothetical drift with given correction in this specific dataset: {(cumulative_difference[-1] * avg_duration_of_sample_us) / 1000000} seconds")
     return difference_period
-    
+
 estimated_period_undamped = period_fit(temp)
 estimated_period_damped = period_damped_fit(perhaps_best_temp)
 
