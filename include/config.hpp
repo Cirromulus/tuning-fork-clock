@@ -38,7 +38,7 @@ static constexpr OscCount expectedMaxCount {periodsPerMeasurement * toMicrosecon
 static_assert(std::numeric_limits<OscCount>::max() > expectedMaxCount);
 
 /*
- * The lastest run:
+ * The last run of ./analysis/estimate.py:
  On damped data (0.002279174504551375):
  Factors of best fit: f(x) = 987958.2603574242x^0 + 1.5367473577982667x^1 + -4.597156613378032e-05x^2
  */

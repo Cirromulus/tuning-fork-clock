@@ -74,16 +74,14 @@ def legendAllAxes(*axis):
     labs = [l.get_label() for l in lines if not '_' in l.get_label() ]
     axis[0].legend(lines, labs)
 
-def dampen(factor, xs, time_delta = None):
+# No time delta is in there, because we would apply it on the rolling value,
+# which would over-apply the time factor. This would need the derivative or something.
+# TODO: Also log "diff" as a cheaper measure of change rate?
+def dampen(factor, xs):
     rolling_value = xs[0]
     ret = []
-    for x, td in zip(xs, time_delta):
+    for x in xs:
         diff = x - rolling_value
-        # I am too dumb to get the units correct.
-        # Assume that the time delta is somewhat in there.
-        # This means, after fitting, having the same sample rate is
-        # pretty important to a correct function.
-        # Hmm, perhaps 1-(1/(1+x^2))?
         rolling_value += diff * factor
         ret.append(rolling_value)
     return ret
@@ -167,7 +165,7 @@ def getAvgPhaseLatencyAgainstPeriod(input_curve):
 # printExtrema(common_period_extrema, "common_period")
 print (f"mean time difference of period reacting on measured period: {base_latency_s}s")
 
-if args.emit_plot:# and False: # this is not too helpful
+if args.emit_plot and False: # this is not too helpful
     plt.figure()
     plt.hist(common_time_diffs, probably_not_slower_than, label="Extrema")
     plt.axvline(base_latency_s, color="red", label="Mean", linestyle="dotted")
@@ -189,12 +187,12 @@ for i in range(0, steps):
     lin_f = 1 * ((i+1) / steps)
     factor = min(scaled_interest_bounds) + max(scaled_interest_bounds) * factorScaled(lin_f)
     # print (f"Factor {lin_f}: {factor}")
-    damped_curve = np.array(dampen(factor, temp, period / 1000000))
+    damped_curve = np.array(dampen(factor, temp))
     avg_delay = getAvgPhaseLatencyAgainstPeriod(damped_curve)
     damped_temperatures += [(lin_f, factor, damped_curve, avg_delay)]
 
 # Print temp and period, along with the damping-series
-if args.emit_plot:
+if args.emit_plot and False:
     # First: Just print the data we have.
     fig, ax1 = plt.subplots()
     ax2 = ax1.twinx()
@@ -252,7 +250,7 @@ for i in zero_crossings_i:
 
 print (f"Interpolated crossing points: factor of {zero_crossings}")
 
-if args.emit_plot:
+if args.emit_plot and False:
     plt.figure()
     plt.title(f"Estimation of best damp factor: {zero_crossings[0]}")
 
@@ -275,7 +273,7 @@ if len(zero_crossings) != 1:
     exit()
 
 perhaps_best_damp_factor = zero_crossings[0]
-perhaps_best_temp = np.array(dampen(perhaps_best_damp_factor, temp, period / 1000000))
+perhaps_best_temp = np.array(dampen(perhaps_best_damp_factor, temp))
 
 def fit(x, y, order):
     fit, cov = np.polyfit(x, y, order, cov=True)
@@ -290,13 +288,13 @@ def fit(x, y, order):
     return np.poly1d(fit)
 
 fit_degree = 2  # We expect a linear relationship, but let's add another degree
-print ("On scaled data:")
+print ("On normal data:")
 period_fit = fit(temp, period, fit_degree)
 print (f"On damped data ({perhaps_best_damp_factor}):")
 period_damped_fit = fit(perhaps_best_temp, period, fit_degree)
 
 # THe scatter-plot. Watch out, it takes some time.
-if args.emit_plot:
+if args.emit_plot and False:
     def getNormalizedRangeAndBin(thing, thing_meta):
         range = (min(thing_meta.normalize(thing)) - 1, max(thing_meta.normalize(thing)) + 1)
         resolution = 2 # thing_meta.normalize(1) # because we don't need that many bins
@@ -338,6 +336,53 @@ if args.emit_plot:
     plt.ylabel('Period per one cycle [us]')
     plt.title("Correlation Data")
 
+# plt.show()
+# exit()
+
+# This is TODO...
+# It seems that we might correlate the temperature change speed with the correction error!
+
+# this is actually something like a convolution with a normalized diff pulse
+def slidingWindowGradient(xs, ys, windowsize):
+    assert windowsize % 2 == 0
+    assert len(xs) == len(ys)
+    half_ws = int(windowsize / 2)
+
+    gradients = []
+    for i in range(len(xs)):
+        left_i = max(i - half_ws, 0)
+        right_i = min(i + half_ws, len(xs) - 1)
+        left = xs[left_i:i+1]
+        right = xs[i:right_i+1]
+
+        diff_x = (sum(right) / len(right)) - (sum(left) / len(left))
+        diff_y = ys[right_i] - ys[left_i]
+        gradients.append(diff_x / diff_y)
+
+    return gradients
+
+# samples, which is near "seconds" (TODO: Calculate from seconds)
+window = 64 # Should be big enough to supress noise
+temperature_change_rate_centidegree_per_s = np.array(slidingWindowGradient(temp_smooth, sample_time_s, window))
+
+# this also works, but I don't Brain enough for modeling that in the clock later.
+# temperature_change_rate_centidegree_per_us = np.gradient(temp, period, edge_order=2)
+
+if args.emit_plot:
+    fig, ax1 = plt.subplots()
+    ax2 = ax1.twinx()
+    plt.title("Drift Evaluation")
+    plt.xlabel('Time [s]')
+    ax1.set_ylabel('Temperature [degC]')
+    ax2.set_ylabel('Temperature change rate [Celsius / s]')
+    ax1.plot(sample_time_s, temp_meta.normalize(temp),
+            label='Measured temperature', color='lightcoral')
+    ax2.plot(sample_time_s, temperature_change_rate_centidegree_per_s / temp_meta.normalize(1),
+            label='Temperature change', color="red", alpha=.8)
+    legendAllAxes(ax1, ax2)
+
+plt.show()
+exit()
 
 # OK, and apply inverse of correlation to try linearize period
 
@@ -384,28 +429,6 @@ if args.emit_plot:
     # reset ylim to have difference really touching bottom
     # ax2.set_ylim((unten, oben))
     legendAllAxes(ax1, ax2)
-
-
-# This is TODO...
-# It seems that we might correlate the temperature change speed with the correction error!
-
-# temperature_change = np.diff(temp)
-# temperature_change_rate = temperature_change / np.array(dataframe[data.TABLE_FORMAT['period'].name])[:1]
-# smoothed_temp_change_rate = savgol_filter(temperature_change_rate, 500, 2)
-
-# if args.emit_plot and False:
-#     fig, ax1 = plt.subplots()
-#     ax2 = ax1.twinx()
-#     plt.title("Drift Evaluation")
-#     plt.xlabel('Time [s]')
-#     ax1.set_ylabel('Difference [us]')
-#     ax2.set_ylabel('Temperature change rate [Celsius / s]')
-#     ax1.plot(sample_time_s, difference_period,
-#             label='Difference from Reference', color='green')
-#     ax2.plot(sample_time_s[1:], smoothed_temp_change_rate,
-#             label='Temperature change (filtered)', color="red")
-#     legendAllAxes(ax1, ax2)
-
 
 if args.emit_plot:
     plt.show()

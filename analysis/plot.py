@@ -36,7 +36,7 @@ plt.figure("All available data")
 for name, (column, coldesc) in columns.items():
     if name == 'period':
         continue
-    print (f"{name}: {coldesc}")
+    # print (f"{name}: {coldesc}")
     # Three integers (nrows, ncols, index)
     current_axis = plt.subplot(rows, cols, i, sharex=first_axis)
     if not first_axis:
@@ -60,12 +60,11 @@ estimate_period_norm = estimate_period - constant_diff
 estimate_diff_norm = estimate_period_norm - actual_period
 estimate_diff_cum = columns['period'][1].normalize(np.cumsum(estimate_diff_norm))
 
-
-print (actual_period)
-print (estimate_period)
-print (f"Initial difference: {constant_diff}")
-print (estimate_period_norm)
-print (estimate_diff_norm)
+# print (actual_period)
+# print (estimate_period)
+# print (f"Initial difference: {constant_diff}")
+# print (estimate_period_norm)
+# print (estimate_diff_norm)
 
 plt.figure("Precision")
 ax1 = plt.subplot(212)
