@@ -96,7 +96,8 @@ int main() {
     auto lastEnvironmentSample = bme.readEnvironment();
     auto lastValidOscSampleTime = get_absolute_time();
     uint64_t estimatedElapsedTime_us = 0;
-    constexpr CompensationEstimator estimator{temperatureCalibrationPolynom};
+    constexpr CompensationEstimator periodEstimator{temperatureCalibrationPolynom};
+    constexpr CompensationEstimator errorEstimator{tempRateCalibrationPolynom};
     Damper tempDamp{dampFactor};
 
     // is here because of no signal not working on the first occurrence dunno
@@ -153,9 +154,13 @@ int main() {
             }
 
             const double estimatedTemperature_cdg = tempDamp.getEstimate();
-            // estimator polynom is based on unnormalized data
-            const double estimatedPeriod_us = estimator.estimate(estimatedTemperature_cdg);
-            estimatedElapsedTime_us += llround(estimatedPeriod_us);
+            const double estimatedTemperatureGradient_cdg = tempDamp.getCurrentDiff();
+
+            const double estimatedPeriod_us = periodEstimator.estimate(estimatedTemperature_cdg);
+            const double estimatedErrorCorrection_us = errorEstimator.estimate(estimatedTemperatureGradient_cdg);
+            const double estimatedCorrectedPeriod_us = estimatedPeriod_us + estimatedErrorCorrection_us;
+
+            estimatedElapsedTime_us += llround(estimatedCorrectedPeriod_us);
 
             if (currentLine >= printHeaderEveryNLines)
             {

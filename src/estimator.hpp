@@ -33,8 +33,10 @@ private:
 struct Damper
 {
     constexpr
-    Damper(const double& dampFactor)
-        : mRollingEstimate{std::nullopt}, mDampFactor{dampFactor}
+    Damper(const double& dampFactor) :
+        mRollingEstimate{std::nullopt},
+        mCurrentDiff{0},
+        mDampFactor{dampFactor}
     {
     }
 
@@ -43,19 +45,26 @@ struct Damper
     consumeNextCycle(const double& value)
     {
         const double previousValue = mRollingEstimate.value_or(value);
-        const double diff = value - previousValue;
-        mRollingEstimate = previousValue + diff * mDampFactor;
+        mCurrentDiff = value - previousValue;
+        mRollingEstimate = previousValue + mCurrentDiff * mDampFactor;
     }
 
     constexpr
-    double
+    auto
     getEstimate() const
     {
         return mRollingEstimate.value_or(0);
     }
 
+    constexpr
+    auto
+    getCurrentDiff() const
+    {
+        return mCurrentDiff;
+    }
 
 private:
     std::optional<double> mRollingEstimate;
+    double mCurrentDiff;
     double mDampFactor;
 };

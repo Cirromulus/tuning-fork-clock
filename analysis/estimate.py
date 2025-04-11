@@ -28,17 +28,22 @@ parser = ArgumentParser(
             description='Plots statistics about data of tuning fork')
 
 parser.add_argument('database')
-parser.add_argument('--no-emit-plot', default=True, action='store_false',dest ='emit_plot')
+parser.add_argument('--no-emit-plot', default=True, action='store_false', dest ='emit_plot')
 args = parser.parse_args()
 # print (args)
 
 dataframe = readSqlite(args.database)
 
-print ("Data:")
-print (dataframe)
-print ("Estimated covariance between columns:")
-print (dataframe.cov())
-print ()
+# could be made an option as well
+output_file_name = '.'.join(args.database.split('.')[:-1]) + ".calib"
+output_file = open(output_file_name, "w")
+print (f"Writing results to {output_file}")
+
+# print ("Data:")
+# print (dataframe)
+# print ("Estimated covariance between columns:")
+# print (dataframe.cov())
+# print ()
 
 # TODO: THis is useful for only plotting, but we also calculate.
 # TODO Split.
@@ -56,18 +61,23 @@ sample_time_us = np.cumsum(np.array(period))
 sample_time_s = sample_time_us / 10000000
 duration_of_measurement_us = sample_time_us[-1]
 avg_duration_of_sample_us = duration_of_measurement_us / len(dataframe)
+
 print (f"Duration of measurement run: {duration_of_measurement_us / 1000000}s (based on reference clock)")
+output_file.write(f"Estimation for {args.database} ({duration_of_measurement_us / 1000000} seconds)\n")
 
-def printStdDev(name, thing, sample_mean = None):
-    std, mean = (np.std(thing), np.mean(thing))
-    seconds_per_day = 24 * 60 * 60
-    if not sample_mean:
-        # this is if we apply a difference, which is of course offset to an absolute value
-        sample_mean = mean
-    print (f"Standard deviation of the {name}: {std} us (mean {mean}) -> {std * seconds_per_day / sample_mean} s / day")
-    return std
+def printDriftPerDay(estimation, reference):
+    diff = reference - estimation
+    total_drift_s = np.sum(diff) / 1000000
+    s_per_day = 60 * 60 * 24
+    us_per_day = s_per_day * 1000000
+    duration_of_measurement_d = duration_of_measurement_us / us_per_day
+    drift_s_per_day = total_drift_s / duration_of_measurement_d
+    print (f"Total drift: {total_drift_s}s over {duration_of_measurement_d} days -> {drift_s_per_day}s / day")
+    return drift_s_per_day
 
-uncorrected_period_std = printStdDev("period", period_meta.normalize(period))
+expected_period_us = data.expected_frequency * period_meta.denormalize(1) * 1000000
+print (f"Sample drift with expected period of {expected_period_us}us:")
+baseline_drift = printDriftPerDay([expected_period_us] * len(period), period)
 
 def legendAllAxes(*axis):
     lines = [line for ax in axis for line in ax.get_lines()]
@@ -76,15 +86,19 @@ def legendAllAxes(*axis):
 
 # No time delta is in there, because we would apply it on the rolling value,
 # which would over-apply the time factor. This would need the derivative or something.
-# TODO: Also log "diff" as a cheaper measure of change rate?
-def dampen(factor, xs):
+# Returns tuple of damped values and difference to actual
+def dampenWithDiff(factor, xs):
     rolling_value = xs[0]
     ret = []
     for x in xs:
         diff = x - rolling_value
         rolling_value += diff * factor
-        ret.append(rolling_value)
-    return ret
+        ret.append((rolling_value, diff))
+    values, diffs = zip(*ret)
+    return (np.array(values), np.array(diffs))
+
+def dampen(*args):
+    return dampenWithDiff(*args)[0]
 
 def goodSavgolBecauseILookedAtItHard(x):
     a_smooth_number = 50   # probably "samples"
@@ -187,7 +201,7 @@ for i in range(0, steps):
     lin_f = 1 * ((i+1) / steps)
     factor = min(scaled_interest_bounds) + max(scaled_interest_bounds) * factorScaled(lin_f)
     # print (f"Factor {lin_f}: {factor}")
-    damped_curve = np.array(dampen(factor, temp))
+    damped_curve = dampen(factor, temp)
     avg_delay = getAvgPhaseLatencyAgainstPeriod(damped_curve)
     damped_temperatures += [(lin_f, factor, damped_curve, avg_delay)]
 
@@ -273,7 +287,10 @@ if len(zero_crossings) != 1:
     exit()
 
 perhaps_best_damp_factor = zero_crossings[0]
-perhaps_best_temp = np.array(dampen(perhaps_best_damp_factor, temp))
+perhaps_best_temp_estimate, temp_damp_diff = dampenWithDiff(perhaps_best_damp_factor, temp)
+output_file.write(f"Damp factor: {perhaps_best_damp_factor}\n")
+
+# ---------------
 
 def fit(x, y, order):
     fit, cov = np.polyfit(x, y, order, cov=True)
@@ -285,16 +302,57 @@ def fit(x, y, order):
     print (f"**\nFactors of best fit: {asFunction(fit)}\n**")
     print ("Covariance of fit:")
     print (cov)
-    return np.poly1d(fit)
+    return (np.poly1d(fit), list(reversed(fit)))
 
-fit_degree = 2  # We expect a linear relationship, but let's add another degree
-print ("On normal data:")
-period_fit = fit(temp, period, fit_degree)
-print (f"On damped data ({perhaps_best_damp_factor}):")
-period_damped_fit = fit(perhaps_best_temp, period, fit_degree)
+fit_degree = 2  # We expect a linear relationship, but another degree slightly improves it
+print ("\nOn normal data:")
+period_fit, pf_f = fit(temp, period, fit_degree)
+print (f"\nOn damped data ({perhaps_best_damp_factor}):")
+period_damped_fit, pdf_f = fit(perhaps_best_temp_estimate, period, fit_degree)
+
+estimated_period_undamped = period_fit(temp)
+estimated_period_damped = period_damped_fit(perhaps_best_temp_estimate)
+error_undamped = period - estimated_period_undamped
+error_damped = period - estimated_period_damped
+
+output_file.write(f"Factors for damped period estimation: {pdf_f}\n")
+# ---------------
+
+def printStats(estimated_period):
+    print (f"Hypothetical drift with given correction in this specific dataset:")
+    this_drift = printDriftPerDay(estimated_period, period)
+    improvement_ratio = abs(baseline_drift) / abs(this_drift)
+    print (f"This corresponds to an improvement factor of {improvement_ratio}.")
+
+# Failed test whether temperature changerate can still be somehow fitted.
+# makes it worse throughout.
+# def applyErrorEstimator(which_temp_gradient, which_error):
+#     period_damped_error_deriv_fit = fit(which_temp_gradient, which_error, fit_degree)
+#     estimated_period_error_deriv = period_damped_error_deriv_fit(temp)
+#     estimated_period_deriv = estimated_period_damped - estimated_period_error_deriv
+#     printStats(estimated_period_deriv)
+#     return
+# applyErrorEstimator(temp_damp_diff, error_damped)
+# applyErrorEstimator(temp_damp_diff, error_undamped)
+
+print ("Period error estimation with temp rate change:")
+period_damped_error_deriv_fit, pddf_f = fit(temp_damp_diff, error_damped, fit_degree)
+def period_deriv_fit(temperature, temp_rate):
+    return period_damped_fit(temperature) + period_damped_error_deriv_fit(temp_rate)
+estimated_period_deriv = period_deriv_fit(perhaps_best_temp_estimate, temp_damp_diff)
+error_damped_deriv = period - estimated_period_deriv
+
+
+print("\nUndamped best fit:")
+printStats(estimated_period_undamped)
+print("\nDamped best fit:")
+printStats(estimated_period_damped)
+print (f"\nOn error of period estimation, with temp gradient from temp damp diff:")
+printStats(estimated_period_deriv)
+output_file.write(f"Factors for period error estimation based on temp gradient: {pddf_f}\n")
 
 # THe scatter-plot. Watch out, it takes some time.
-if args.emit_plot and False:
+if args.emit_plot:
     def getNormalizedRangeAndBin(thing, thing_meta):
         range = (min(thing_meta.normalize(thing)) - 1, max(thing_meta.normalize(thing)) + 1)
         resolution = 2 # thing_meta.normalize(1) # because we don't need that many bins
@@ -305,8 +363,8 @@ if args.emit_plot and False:
     temp_range_n, temp_bin = getNormalizedRangeAndBin(temp, temp_meta)
     # print (f"Period range: {period_range} -> bin {period_bin}")
     # print (f"Temp range  : {temp_range} -> bin {temp_bin}")
-    valid_period_fit_range_n = np.arange(temp_range_n[0], temp_range_n[1], temp_meta.normalize(1))
-    valid_period_fit_range = temp_meta.denormalize(valid_period_fit_range_n)
+    valid_temp_fit_range_n = np.arange(temp_range_n[0], temp_range_n[1], temp_meta.normalize(1))
+    valid_temp_fit_range = temp_meta.denormalize(valid_temp_fit_range_n)
 
     # limit scattering to less samples to reduce time overhead
     num_samples_to_scatter = min(5000, len(period)/2)
@@ -322,13 +380,15 @@ if args.emit_plot and False:
     plt.scatter(temp_meta.normalize(temp[0::ss_step_size]), period_meta.normalize(period_ss),
                 alpha=.15,
                 label="Measured samples", color="blue")
-    plt.scatter(temp_meta.normalize(perhaps_best_temp[0::ss_step_size]), period_meta.normalize(period_ss),
+    plt.scatter(temp_meta.normalize(perhaps_best_temp_estimate[0::ss_step_size]), period_meta.normalize(period_ss),
                 alpha=.15, color="lightgreen", label=f"Damped Temperature")
 
-    plt.plot(valid_period_fit_range_n, period_meta.normalize(period_fit(valid_period_fit_range)),
+    plt.plot(valid_temp_fit_range_n, period_meta.normalize(period_fit(valid_temp_fit_range)),
             'red', label="Best fit")
-    plt.plot(valid_period_fit_range_n, period_meta.normalize(period_damped_fit(valid_period_fit_range)),
+    plt.plot(valid_temp_fit_range_n, period_meta.normalize(period_damped_fit(valid_temp_fit_range)),
             'teal', label="Best fit (damped)")
+    # the estimated_period_deriv is harder to add here because it uses temp change
+
 
     plt.legend()
     plt.ticklabel_format(style='plain')
@@ -363,45 +423,11 @@ def slidingWindowGradient(xs, ys, windowsize):
 
 # samples, which is near "seconds" (TODO: Calculate from seconds)
 window = 64 # Should be big enough to supress noise
-temperature_change_rate_centidegree_per_s = np.array(slidingWindowGradient(temp_smooth, sample_time_s, window))
+temperature_change_rate_centidegree_per_s = np.array(slidingWindowGradient(temp, sample_time_s, window))
 
-# this also works, but I don't Brain enough for modeling that in the clock later.
+# this also works, but I don't Brain enough for modeling that in the clock later:
 # temperature_change_rate_centidegree_per_us = np.gradient(temp, period, edge_order=2)
-
-if args.emit_plot:
-    fig, ax1 = plt.subplots()
-    ax2 = ax1.twinx()
-    plt.title("Drift Evaluation")
-    plt.xlabel('Time [s]')
-    ax1.set_ylabel('Temperature [degC]')
-    ax2.set_ylabel('Temperature change rate [Celsius / s]')
-    ax1.plot(sample_time_s, temp_meta.normalize(temp),
-            label='Measured temperature', color='lightcoral')
-    ax2.plot(sample_time_s, temperature_change_rate_centidegree_per_s / temp_meta.normalize(1),
-            label='Temperature change', color="red", alpha=.8)
-    legendAllAxes(ax1, ax2)
-
-plt.show()
-exit()
-
-# OK, and apply inverse of correlation to try linearize period
-
-def printStats(estimated_period, period):
-    difference_period = estimated_period - period
-    cumulative_difference = np.cumsum(np.array(difference_period))
-    corrected_period_std = printStdDev("Corrected Period", difference_period, sample_mean=np.mean(period))
-    improvement_ratio = uncorrected_period_std / corrected_period_std
-    print (f"With linear fit for period estimation, we got an improvement factor of {improvement_ratio}.")
-    print (f"Hypothetical drift with given correction in this specific dataset: {(cumulative_difference[-1] * avg_duration_of_sample_us) / 1000000} seconds")
-    return difference_period
-
-estimated_period_undamped = period_fit(temp)
-estimated_period_damped = period_damped_fit(perhaps_best_temp)
-
-print("\nUndamped best fit:")
-diff_undamped = printStats(estimated_period_undamped, period)
-print("\nDamped best fit:")
-diff_damped = printStats(estimated_period_damped, period)
+# Probably best would be a savgol, but also: I maek comuter do think, not think
 
 if args.emit_plot:
     fig, ax1 = plt.subplots()
@@ -409,18 +435,28 @@ if args.emit_plot:
     ax1.set_xlabel('Time [s]')
     ax2 = ax1.twinx()
     ax1.set_ylabel('Period per one Cycle [us]')
-    ax1.plot(sample_time_s, period_meta.normalize(period), 'green', label="Measured Period")
-    ax1.plot(sample_time_s, period_meta.normalize(estimated_period_undamped), 'darkred', label="Estimated Period")
-    ax1.plot(sample_time_s, period_meta.normalize(estimated_period_damped), 'orange', label="Estimated Period (Damped)")
+    ax1.plot(sample_time_s, period_meta.normalize(period),
+             'green', label="Measured Period")
+    ax1.plot(sample_time_s, period_meta.normalize(estimated_period_undamped),
+             'darkred', label="Estimated Period")
+    ax1.plot(sample_time_s, period_meta.normalize(estimated_period_damped),
+             'orange', label="Estimated Period (Damped)")
+    ax1.plot(sample_time_s, period_meta.normalize(estimated_period_deriv),
+             'springgreen', label="Estimated Period (Damped & Rate)")
 
     ax2.set_ylabel('Difference [us]')
-    ax2.plot(sample_time_s, period_meta.normalize(diff_undamped),
+    ax2.plot(sample_time_s, period_meta.normalize(error_undamped),
             'blue', label='Difference')
-    ax2.plot(sample_time_s, period_meta.normalize(diff_damped),
+    ax2.plot(sample_time_s, period_meta.normalize(error_damped),
             'teal', label='Difference (Damped)')
+    ax2.plot(sample_time_s, period_meta.normalize(error_damped_deriv),
+             label="Difference (Damped & Rate)")
+
+
     ax2.axhline(0, linestyle='dashed', color='lightblue', alpha=.5)
-    ax2.fill_between(sample_time_s, period_meta.normalize(diff_damped), 0,
+    ax2.fill_between(sample_time_s, period_meta.normalize(error_damped), 0,
             color='teal', alpha=.5)
+
 
     # unten, oben = ax2.get_ylim()
     # yoffs = 0# unten
@@ -429,6 +465,63 @@ if args.emit_plot:
     # reset ylim to have difference really touching bottom
     # ax2.set_ylim((unten, oben))
     legendAllAxes(ax1, ax2)
+
+plt.show()
+exit()
+
+# allright, now we are getting desperate
+# damped_damp_diff = dampen(perhaps_best_damp_factor, temp_damp_diff)
+
+
+if args.emit_plot:
+    derive_artige = {
+         # not normalizing, because values are small (TODO investigate)
+        'sliding window': temperature_change_rate_centidegree_per_s / 10,
+        'damp difference': period_meta.normalize(temp_damp_diff),
+        # 'damped damp difference': period_meta.normalize(damped_damp_diff),
+    }
+
+    fig, ax1 = plt.subplots()
+    ax2 = ax1.twinx()
+    plt.title("Drift Evaluation")
+    plt.xlabel('Time [s]')
+    # ax1.set_ylabel('Temperature [degC]')
+    ax1.set_ylabel('Error to Reference per Period [us]')
+    ax2.set_ylabel('Temperature change rate [Celsius / s]')
+    ax1.set_xlabel('Sample time [s]')
+    # ax1.plot(sample_time_s, temp_meta.normalize(temp),
+    #         label='Measured temperature', color='lightcoral')
+    ax1.plot(sample_time_s, period_meta.normalize(error_damped),
+             label='Damped & Estimated')
+    ax2.plot([], [])    # force new color, or else we would start at same color as above
+    for name, deriv in derive_artige.items():
+        ax2.plot(sample_time_s, deriv,
+                label=name, alpha=.8)
+    legendAllAxes(ax1, ax2)
+
+    # A 3D scatter.
+    for name, deriv in derive_artige.items():
+        samples_to_take = min(2000, len(period))
+        step_size = int(len(period) / samples_to_take)
+        plt.figure("Scatter")
+        plt.title("Temp Rate change influence.\nSize means abs(error)")
+        ax = plt.subplot(projection='3d')
+        ax.scatter(period_meta.normalize(period[0::step_size]),
+                   temp_meta.normalize(temp[0::step_size]),
+                   deriv[0::step_size],
+                   label=name, alpha=.5, s=np.abs(error_damped[0::step_size]))
+        ax.set_xlabel('Measured Period [us]')
+        ax.set_ylabel('Measured Temperature [Celsius]')
+        ax.set_zlabel('Change rate [Celsius / s]')
+        ax.legend()
+
+    # the correlation scatters
+    for name, deriv in derive_artige.items():
+        plt.figure()
+        plt.title(f"Estimation Error against {name}")
+        plt.scatter(period_meta.normalize(error_damped), deriv)
+        plt.xlabel("Error of Estimation of Period [us]")
+        plt.ylabel("Temperature Change [deg / C]")
 
 if args.emit_plot:
     plt.show()
