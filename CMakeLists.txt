@@ -10,10 +10,15 @@ set(CMAKE_CXX_STANDARD 23)
 # initialize the Raspberry Pi Pico SDK
 pico_sdk_init()
 
+# lib
+add_subdirectory(lib/interfaces)
+add_subdirectory(lib/mcp23017)
+
+
 # rest of your project
 file(GLOB stimmgabeluhr_LIB
         "lib/*.h"
-        "lib/*.c"
+        "lib/*.cpp"
 )
 
 file(GLOB stimmgabeluhr_SRC
@@ -31,14 +36,10 @@ add_executable(stimmgabeluhr
         ${stimmgabeluhr_LIB}
 )
 target_include_directories(stimmgabeluhr
-        PRIVATE "include"
+        PRIVATE "."
+
 )
 
-
-# Add pico_stdlib library which aggregates commonly used features
-target_link_libraries(stimmgabeluhr
-        pico_stdlib
-)
 
 # enable USB serial output
 pico_enable_stdio_usb(stimmgabeluhr 1)
@@ -51,7 +52,8 @@ pico_generate_pio_header(stimmgabeluhr
 )
 
 target_link_libraries(stimmgabeluhr
-        # make hardware pio available for interpreting pio file
+        pico_stdlib
+        pico_mcp23017
         hardware_pio
         hardware_dma
         hardware_irq
@@ -61,7 +63,7 @@ target_link_libraries(stimmgabeluhr
         )
 
 pico_set_program_name(stimmgabeluhr "Stimmgabeluhr")
-pico_set_program_version(stimmgabeluhr "0.1")
+pico_set_program_version(stimmgabeluhr "0.2")
 
 # create map/bin/hex/uf2 file in addition to ELF.
 pico_add_extra_outputs(stimmgabeluhr)

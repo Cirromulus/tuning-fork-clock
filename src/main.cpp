@@ -1,13 +1,13 @@
-#include "config.hpp"
-#include "bme280.hpp"
-#include "led.hpp"
+#include <include/config.hpp>
+#include <lib/bme280.hpp>
+#include <lib/led.hpp>
 #include "estimator.hpp"
+#include "ddf.hpp"
 
 #include <pico/stdlib.h>
 #include <pico/util/queue.h>
-#include <hardware/i2c.h>
+
 // #include <pico/multicore.h>
-#include <pico/binary_info.h>   // for picotool help
 
 #include <stdio.h>
 #include <cinttypes>   // uhg, oldschool
@@ -27,33 +27,12 @@ static volatile bool shouldSampleEnvironment = false;
 repeating_timer_t environment_sample_timer;
 
 
-// --------------
-
-i2c_inst_t* setupTempI2c()
-{
-    // BME280 is on I2C1 GP26/27
-    static constexpr unsigned sht20_sda = 26;
-    static constexpr unsigned sht20_scl = 27;
-
-    const auto init = i2c_init(i2c1, 100 * 1000); // "baud" rate 100kHz
-    printf("i2c_init(i2c1, 100 * 1000) -> %u\n", init);
-    gpio_set_function(sht20_sda, GPIO_FUNC_I2C);
-    gpio_set_function(sht20_scl, GPIO_FUNC_I2C);
-    gpio_pull_up(sht20_sda);
-    gpio_pull_up(sht20_scl);
-
-    // announce to picotool.
-    // Not mandatory, just nice to have.
-    bi_decl(bi_2pins_with_func(sht20_sda, sht20_scl, GPIO_FUNC_I2C));
-
-    return i2c1;
-}
-
 void printCsvHeader()
 {
     printf ("Period duration [us / %lu]", periodsPerMeasurement);
     printf (", Temperature [0.01 DegC], Pressure [2^(-8) Pa], Humidity [2^(-10) %RH]");
-    printf (", Current Temperature Estimation [0.01 DegC], Current Period Estimation [us], Estimated elapsed time [us]");
+    // printf (", Current Temperature Estimation [0.01 DegC], Current Period Estimation [us]");
+    printf (", Estimated elapsed time [us]");
     printf (", Difference to internal time [us]");
     printf ("\n");
 }
@@ -95,10 +74,12 @@ int main() {
 
     auto lastEnvironmentSample = bme.readEnvironment();
     auto lastValidOscSampleTime = get_absolute_time();
-    uint64_t estimatedElapsedTime_us = 0;
-    constexpr CompensationEstimator periodEstimator{temperatureCalibrationPolynom};
-    constexpr CompensationEstimator errorEstimator{tempRateCalibrationPolynom};
-    Damper tempDamp{dampFactor};
+
+    Estimator timeEstimator{
+        PolynomCalc{temperatureCalibrationPolynom},
+        PolynomCalc{tempRateCalibrationPolynom},
+        Damper{dampFactor}
+    };
 
     // is here because of no signal not working on the first occurrence dunno
     status.noSignal();
@@ -123,6 +104,9 @@ int main() {
             lastValidOscSampleTime = get_absolute_time();
         }
 
+        // Set status "default", will be overwritten later if something errorred
+        status.expectedFrequency();
+
         if (shouldSampleEnvironment)
         {
             const auto maybeCurrentEnv = bme.readEnvironment();
@@ -131,36 +115,34 @@ int main() {
                 lastEnvironmentSample = *maybeCurrentEnv;
                 shouldSampleEnvironment = false;
             }
+            else
+            {
+                status.invalidTempReading();
+            }
         }
 
         if (oscCount > expectedMaxCount)
         {
             status.tooLowFrequency();
+            continue;
         }
-        else if (oscCount < expectedMinCount)
+        if (oscCount < expectedMinCount)
         {
             status.tooHighFrequency();
+            continue;
         }
-        else
+        if (!lastEnvironmentSample)
         {
-            // we effectively skip unexpected samples
+            // we never had a valid reading
+            status.invalidTempReading();
+            continue;
+        }
 
-            // show status
-            status.expectedFrequency();
+        {
+            // we effectively skipped all unexpected samples
 
-            if (lastEnvironmentSample)
-            {
-                tempDamp.consumeNextCycle(lastEnvironmentSample->temperature_centidegree);
-            }
-
-            const double estimatedTemperature_cdg = tempDamp.getEstimate();
-            const double estimatedTemperatureGradient_cdg = tempDamp.getCurrentDiff();
-
-            const double estimatedPeriod_us = periodEstimator.estimate(estimatedTemperature_cdg);
-            const double estimatedErrorCorrection_us = errorEstimator.estimate(estimatedTemperatureGradient_cdg);
-            const double estimatedCorrectedPeriod_us = estimatedPeriod_us + estimatedErrorCorrection_us;
-
-            estimatedElapsedTime_us += llround(estimatedCorrectedPeriod_us);
+            timeEstimator.consumeNextMeasurement(lastEnvironmentSample->temperature_centidegree);
+            const auto currentEstimatedElapsedTime = timeEstimator.getEstimatedElapsedTime();
 
             if (currentLine >= printHeaderEveryNLines)
             {
@@ -171,22 +153,21 @@ int main() {
             printf("%lu", oscCount);
 
             {
-                const auto env = lastEnvironmentSample.value_or(BME280::invalidMeasurement);
                 printf(",%ld,%lu,%lu",
-                    env.temperature_centidegree,
-                    env.pressure_q23_8,
-                    env.humidity_q22_10);
+                    lastEnvironmentSample->temperature_centidegree,
+                    lastEnvironmentSample->pressure_q23_8,
+                    lastEnvironmentSample->humidity_q22_10);
             }
 
-            printf(",%f,%f,%lld", estimatedTemperature_cdg, estimatedPeriod_us, estimatedElapsedTime_us);
-            printf(",%lld", time_us_64() - estimatedElapsedTime_us);
+            printf(",%lld", currentEstimatedElapsedTime);
+            printf(",%lld", time_us_64() - currentEstimatedElapsedTime);
 
             // now the derived values
             // printf(",%f,%ld,%lu,%lu",
             //         static_cast<double>(referenceClockFrequency * periodsPerMeasurement) / oscCount,
-            //         env.getTemperatureDegree(),
-            //         env.getPressurePa(),
-            //         env.getHumidityPercentRH()
+            //         lastEnvironmentSample->getTemperatureDegree(),
+            //         lastEnvironmentSample->getPressurePa(),
+            //         lastEnvironmentSample->getHumidityPercentRH()
             // );
 
             printf("\n");

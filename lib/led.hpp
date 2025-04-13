@@ -62,6 +62,12 @@ public:
     }
 
     void
+    invalidTempReading()
+    {
+        led.put_pixel(urgb_u32(brightness/2, brightness, 0));
+    }
+
+    void
     noSignal()
     {
         led.put_pixel(urgb_u32(brightness, 0, brightness / 2));

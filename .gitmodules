@@ -2,3 +2,9 @@
 	path = pico-sdk
 	url = https://github.com/raspberrypi/pico-sdk
 	shallow = true
+[submodule "lib/mcp23017"]
+	path = lib/mcp23017
+	url = https://github.com/adamboardman/pico-mcp23017.git
+[submodule "lib/interfaces"]
+	path = lib/interfaces
+	url = https://github.com/adamboardman/pico-interfaces.git

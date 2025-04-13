@@ -5,18 +5,18 @@
 #include <optional>
 
 template <size_t PolyCount>
-class CompensationEstimator
+class PolynomCalc
 {
 public:
     static constexpr size_t numberOfPolynoms = PolyCount;
 
-    constexpr CompensationEstimator(const std::array<double, PolyCount>& polynoms)
+    constexpr PolynomCalc(const std::array<double, PolyCount>& polynoms)
         : mPolynoms{polynoms}
     {}
 
     constexpr
     double
-    estimate(const double& parameter) const
+    calculate(const double& parameter) const
     {
         double sum = mPolynoms[0];
         for (size_t i = 1; i < mPolynoms.size(); i++)
@@ -67,4 +67,57 @@ private:
     std::optional<double> mRollingEstimate;
     double mCurrentDiff;
     double mDampFactor;
+};
+
+template <
+    typename PeriodEstimatorType,   // TODO: Contract or smthng
+    typename ErrorEstimatorType,
+    typename DamperType>
+class Estimator
+{
+public:
+    constexpr
+    Estimator(const PeriodEstimatorType& pe,
+              const ErrorEstimatorType& ee,
+              const DamperType& da) :
+        mEstimatedElapsedTime_us{0},
+        mPeriodEstimator{pe},
+        mErrorEstimator{ee},
+        mDamper{da}
+    {}
+
+    template <typename MeasurementType>
+    constexpr
+    void
+    consumeNextMeasurement(const MeasurementType& temperatureMeasurement)
+    {
+        mDamper.consumeNextCycle(temperatureMeasurement);
+
+        const double estimatedTemperature_cdg = mDamper.getEstimate();
+        const double estimatedTemperatureGradient_cdg = mDamper.getCurrentDiff();
+
+        const double estimatedPeriod_us = mPeriodEstimator.calculate(estimatedTemperature_cdg);
+        const double estimatedErrorCorrection_us = mErrorEstimator.calculate(estimatedTemperatureGradient_cdg);
+
+        const double estimatedCorrectedPeriod_us = estimatedPeriod_us + estimatedErrorCorrection_us;
+
+        mEstimatedElapsedTime_us += llround(estimatedCorrectedPeriod_us);
+    }
+
+    /**
+     * @return Time in microseconds
+     */
+    constexpr
+    auto
+    getEstimatedElapsedTime() const
+    {
+        return mEstimatedElapsedTime_us;
+    }
+
+private:
+    uint64_t mEstimatedElapsedTime_us;
+
+    PeriodEstimatorType mPeriodEstimator;
+    ErrorEstimatorType mErrorEstimator;
+    Damper mDamper;
 };
