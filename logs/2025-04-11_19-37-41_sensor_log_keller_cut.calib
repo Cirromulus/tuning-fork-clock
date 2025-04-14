@@ -1,0 +1,4 @@
+Estimation for 2025-04-11_19-37-41_sensor_log_keller_cut.db (268150.463065 seconds)
+Damp factor: 0.0019380266443611701
+Factors for damped period estimation: [986664.3098605846, 2.9143758364483627, -0.00040597065844339374]
+Factors for period error estimation based on temp gradient: [-0.04625063392973857, -0.01617456524507117, 0.00042465750397566404]

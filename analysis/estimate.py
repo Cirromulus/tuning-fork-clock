@@ -106,11 +106,17 @@ def goodSavgolBecauseILookedAtItHard(x):
 
 def getExtrema(thing):
     min_expected_peak_distance = 60 # FIXME: Normalize with sample density
+    min_prominence = temp_meta.denormalize(.5)
+    min_height = temp_meta.denormalize(10)
     maxima = find_peaks(thing,
+                        height=min_height,
                         distance=min_expected_peak_distance,
+                        prominence=min_prominence,
                         width=min_expected_peak_distance)
     minima = find_peaks(-thing, # negated!
+                        height=min_height,
                         distance=min_expected_peak_distance,
+                        prominence=min_prominence,
                         width=min_expected_peak_distance)
     return (maxima[0], minima[0])
 
@@ -179,7 +185,7 @@ def getAvgPhaseLatencyAgainstPeriod(input_curve):
 # printExtrema(common_period_extrema, "common_period")
 print (f"mean time difference of period reacting on measured period: {base_latency_s}s")
 
-if args.emit_plot and False: # this is not too helpful
+if args.emit_plot: # this is not too helpful
     plt.figure()
     plt.hist(common_time_diffs, probably_not_slower_than, label="Extrema")
     plt.axvline(base_latency_s, color="red", label="Mean", linestyle="dotted")
@@ -206,7 +212,7 @@ for i in range(0, steps):
     damped_temperatures += [(lin_f, factor, damped_curve, avg_delay)]
 
 # Print temp and period, along with the damping-series
-if args.emit_plot and False:
+if args.emit_plot:
     # First: Just print the data we have.
     fig, ax1 = plt.subplots()
     ax2 = ax1.twinx()
@@ -264,7 +270,7 @@ for i in zero_crossings_i:
 
 print (f"Interpolated crossing points: factor of {zero_crossings}")
 
-if args.emit_plot and False:
+if args.emit_plot:
     plt.figure()
     plt.title(f"Estimation of best damp factor: {zero_crossings[0]}")
 
