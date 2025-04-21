@@ -1,6 +1,8 @@
 #include <include/config.hpp>
 #include <lib/bme280.hpp>
 #include <lib/led.hpp>
+#include <mcp23017.h>
+
 #include "estimator.hpp"
 #include "ddf.hpp"
 
@@ -43,6 +45,13 @@ int main() {
 
     OnboardLED led{16};
     Status status{led, 0x03};
+
+    i2c_inst_t* mcpI2c = setupMcpI2c();
+    while(true)
+    {
+        busScan(mcpI2c);
+        sleep_ms(1000);
+    }
 
     BME280 bme{setupTempI2c()};
 

@@ -40,8 +40,16 @@
   POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include <Adafruit_MCP23017.h>
+#include <mcp23017.h>
 
+struct HDSP21XXPins
+{
+  // Thought I could compress all pins on the MCP.
+  // TODO: Check
+}
+
+class HDSP21XX
+{
 
 /* pins on atmega328p */
 
@@ -54,11 +62,9 @@
 #define LED_RD   13
 #define LED_RST  15
 #define LED_WR   10
-#define PS2_CLK  3
-#define PS2_DAT  2
 
 Adafruit_MCP23017 mcp;
-PS2Keyboard keyboard;
+
 
 #define DISP_SIZE 32
 #define MAX_DISPLAYS 4
@@ -94,21 +100,12 @@ static uint8_t term_font_id = 0;
 static uint8_t term_cursor = 0;
 static uint8_t term_brightness = DEFAULT_BRIGHTNESS;
 
-// terminal state machine for parsing escape codes
-typedef enum {STATE_START, STATE_ESC, STATE_BRACKET, STATE_DIGIT0, STATE_DIGIT1} term_state_type;
-term_state_type term_state = STATE_START;
-uint8_t esc_digit0 = 0, esc_digit1 = 0;
-
 // low-level routines
 
 /* set hdsp-21xx address and data bus values on bus extender */
 inline void hdsp_set_addr_dta(uint8_t addr, uint8_t dta)
 {
-  uint16_t ba;
-  ba = addr;
-  ba = ba << 8;
-  ba = ba | dta;
-  mcp.writeGPIOAB(ba);
+  mcp.writeGPIOAB(addr << 8 | dta);
   return;
 }
 
@@ -408,197 +405,10 @@ void setup() {
   hdsp_clear_screen();
   hdsp_brightness(DEFAULT_BRIGHTNESS);  // Set default brightness and allow character blinking
 
-  // initialize ps/2 keyboard
-  keyboard.begin(PS2_DAT, PS2_CLK);
-
   // ready!
   display_ready();
 
   return;
 }
 
-
-// read one character from the keyboard and send it to the serial port
-
-void keyboard_loop()
-{
-  if (keyboard.available() /* && Serial.availableForWrite() // not needed on atmega328 - Serial.Write never blocks */ )
-    Serial.write(keyboard.read());
-
-  return;
-}
-
-/* read one character from the serial port and send it to the display */
-void display_loop()
-{
-  int ch = 0;
-
-  if (Serial.available() <= 0) return;
-
-  ch = Serial.read();
-
-  /* Escape codes */
-
-  /*
-   Esc[2J              Clear screen
-   Esc[5m              Turn blinking mode on
-   Esc[0m              Turn blinking mode off
-   Esc[30m ... Esc[37m Set display brightness 0 ... 7. 0 = blanked display, 7 = maximum brightness.
-   Esc[1G ... Esc[33G  Set cursor position. 1 = top left. 33 = bottom right
-   Esc[10m             Select default ascii font
-   Esc[11m             Select Katakana font
-   Esc[12m             Select Cyrillic font
-   Esc[2;              Display test
-   */
-
-  switch (term_state) {
-    case STATE_START:
-      /* escape */
-      if (ch == '\e')
-      {
-        term_state = STATE_ESC;
-        return;
-      }
-
-      /* new line */
-      if (ch == '\n')
-      {
-        if (term_cursor >= 16) hdsp_scroll();
-        term_cursor = 16;
-        return;
-      }
-
-      /* carriage return */
-      if (ch == '\r')
-      {
-        if (term_cursor >= 16) term_cursor = 16;
-        else  term_cursor = 0;
-        return;
-      }
-
-      /* backspace */
-      if (ch == '\b') {
-        if (term_cursor == 0) return;
-        --term_cursor;
-        hdsp_print_char(' ', false, 0); // overwrite with space
-        --term_cursor;
-        return;
-      }
-
-      hdsp_print_char(ch, term_blinking, term_font_id); // write incoming character at current cursor position
-
-      break;
-
-    case STATE_ESC:
-      if (ch == '[')
-      {
-        term_state = STATE_BRACKET;
-        return;
-      }
-      hdsp_error();
-      term_state = STATE_START;
-      break;
-
-    case STATE_BRACKET:
-      if ((ch >= '0') && (ch  <= '9'))
-      {
-        esc_digit0 = ch - '0';
-        term_state = STATE_DIGIT0;
-        return;
-      }
-      hdsp_error();
-      term_state = STATE_START;
-      break;
-
-    case STATE_DIGIT0:
-      if ((ch == 'J') && (esc_digit0 == 2))
-      {
-        /* Esc[2J - clear screen */
-        hdsp_clear_screen();
-        term_state = STATE_START;
-        return;
-      }
-      if ((ch == ';') && (esc_digit0 == 2))
-      {
-        /* Esc[2; - display test */
-        display_test();
-        term_state = STATE_START;
-        return;
-      }
-      if ((ch == 'm') && (esc_digit0 == 5))
-      {
-        /* Esc[5m - blinking on */
-        term_blinking = true;
-        term_state = STATE_START;
-        return;
-      }
-      if ((ch == 'm') && (esc_digit0 == 0))
-      {
-        /* Esc[0m - blinking off */
-        term_blinking = false;
-        term_state = STATE_START;
-        return;
-      }
-      if ((ch == 'G') && (esc_digit0 > 0))
-      {
-        /* Esc[1G .. Esc[9G - set cursor position, one digit. */
-        term_cursor = esc_digit0 - 1;
-        term_state = STATE_START;
-        return;
-      }
-      if ((ch >= '0') && (ch  <= '9'))
-      {
-        esc_digit1 = ch - '0';
-        term_state = STATE_DIGIT1;
-        return;
-      }
-      hdsp_error();
-      term_state = STATE_START;
-      break;
-
-    case STATE_DIGIT1:
-      if ((ch == 'm') && (esc_digit0 == 3))
-      {
-        /* Esc[30m .. Esc[37m - set display brightness */
-        if (esc_digit1 <= 7) hdsp_brightness(7 - esc_digit1);
-        term_state = STATE_START;
-        return;
-      }
-      if ((ch == 'm') && (esc_digit0 == 1))
-      {
-        /*
-         * Esc[10m Select default ascii font
-         * Esc[11m Select Katakana font
-         * Esc[12m Select Cyrillic font
-         */
-        if (esc_digit1 <= MAX_FONTS) term_font_id = esc_digit1;
-        term_state = STATE_START;
-        return;
-      }
-      if (ch == 'G')
-      {
-        /* Esc[10G .. Esc[33G - set cursor position, two digits. */
-        int8_t new_cursor = esc_digit0 * 10 + esc_digit1 - 1;
-        if ((new_cursor >= 0) && (new_cursor <= 32)) term_cursor = new_cursor;
-        term_state = STATE_START;
-        return;
-      }
-      hdsp_error();
-      term_state = STATE_START;
-      break;
-
-    default:
-      hdsp_error();
-      term_state = STATE_START;
-      break;
-  }
-  return;
-}
-
-void loop() {
-  keyboard_loop();
-  display_loop();
-  return;
-}
-
-//not truncated
+};
