@@ -40,375 +40,171 @@
   POSSIBILITY OF SUCH DAMAGE.
 */
 
+#pragma once
+
 #include <mcp23017.h>
+#include <array>
+#include <optional>  // Lol this will never be prod enough
 
 struct HDSP21XXPins
 {
-  // Thought I could compress all pins on the MCP.
-  // TODO: Check
-}
+  using Pin = uint8_t;
 
-class HDSP21XX
-{
-
-/* pins on atmega328p */
-
-#define LED_CE0  16
-#define LED_CE1  11
-#define LED_CE2  17
-#define LED_CE3  12
-#define LED_CLK  9
-#define LED_FL   14
-#define LED_RD   13
-#define LED_RST  15
-#define LED_WR   10
-
-Adafruit_MCP23017 mcp;
-
-
-#define DISP_SIZE 32
-#define MAX_DISPLAYS 4
-#define ALL_DISPLAYS 255
-
-#define MAX_FONTS 2
-#define DEFAULT_BRIGHTNESS 4
-#define BAUD_RATE 38400
-
-// hdsp-21xx chip enable pins, active low
-static uint8_t hdsp_chip_enable[4] = {LED_CE0, LED_CE1, LED_CE2, LED_CE3};
-
-// Display buffer
-struct display_char
-{
-  uint8_t ch;
-  uint8_t font_id;
-  bool blinking;
+  std::array<Pin, 8> data;
+  std::array<Pin, 5> address;
+  Pin chipEnable;
+  std::optional<Pin> read;  // not connected in my setup
+  Pin write;
+  Pin flash;
+  std::optional<Pin> reset; // not connected in my setup
 };
 
-struct display_char hdsp_display[DISP_SIZE];
-
-// 16-bit port extender
-void mcp_init() {
-  mcp.begin();
-  for (uint8_t i; i < 16; i++) mcp.pinMode(i, OUTPUT);
-  mcp.writeGPIOAB(0);
-}
-
-// current terminal mode
-static bool term_blinking = false;
-static uint8_t term_font_id = 0;
-static uint8_t term_cursor = 0;
-static uint8_t term_brightness = DEFAULT_BRIGHTNESS;
-
-// low-level routines
-
-/* set hdsp-21xx address and data bus values on bus extender */
-inline void hdsp_set_addr_dta(uint8_t addr, uint8_t dta)
+// This was downgraded to only work for one single display.
+// template <HDSP21XXPins pinSetup> // sadly, this was over my compiler's abilities because of std::optional
+class HDSP21XX
 {
-  mcp.writeGPIOAB(addr << 8 | dta);
-  return;
-}
-
-// configure hdsp clock. all displays receive the same clock, so characters blink in sync
-void hdsp_init_clk()
-{
-  // configure TIMER 1 for frequency of 57348 Hz.
-  Timer1.initialize(17);  // set PWM period to 17 us = 58.8 kHz
-
-  // set LED_CLK output pin to 50% duty cycle
-  Timer1.pwm(LED_CLK, 511);
-
-  return;
-}
-
-// display hard reset
-void hdsp_reset() {
-    /* Pull HDSP-21xx reset pin low */
-  digitalWrite(LED_RST, LOW);
-  delay(1); /* Needs three clock cycles for hardware reset */
-  digitalWrite(LED_RST, HIGH);
-  delay(1);
-}
-
-// write one byte on hdsp bus
-// disp: display number, 0..3
-// addr: address
-// dta: data
-// flash: if low, access "flash" memory to store blinking attribute.
-void hdsp_write_cycle(uint8_t disp, uint8_t addr, uint8_t dta, uint8_t flash)
-{
-
-#ifdef DEBUG
-  Serial.print("hdsp_write_cycle disp ");
-  Serial.print(disp);
-  Serial.print(" addr ");
-  Serial.print(addr, BIN);
-  Serial.print(" dta ");
-  Serial.println(dta, BIN);
-  Serial.print(" flash ");
-  Serial.print(flash);
-#endif
-
-  digitalWrite(LED_FL, flash);
-  hdsp_set_addr_dta(addr, dta);
-  delayMicroseconds(1);
-  if (disp != ALL_DISPLAYS)
-    digitalWrite(hdsp_chip_enable[disp], LOW);
-  else {
-    /* pull all chip enables low for parallel write */
-    digitalWrite(LED_CE0, LOW);
-    digitalWrite(LED_CE1, LOW);
-    digitalWrite(LED_CE2, LOW);
-    digitalWrite(LED_CE3, LOW);
-  }
-  delayMicroseconds(1);
-  digitalWrite(LED_WR, LOW);
-  delayMicroseconds(1);
-  digitalWrite(LED_WR, HIGH);
-  delayMicroseconds(1);
-  if (disp != ALL_DISPLAYS)
-    digitalWrite(hdsp_chip_enable[disp], HIGH);
-  else {
-    /* restore all chip enables */
-    digitalWrite(LED_CE0, HIGH);
-    digitalWrite(LED_CE1, HIGH);
-    digitalWrite(LED_CE2, HIGH);
-    digitalWrite(LED_CE3, HIGH);
-  }
-  digitalWrite(LED_FL, HIGH);
-  delayMicroseconds(1);
-}
-
-/* blink character at position pos */
-void hdsp_blink_char(uint8_t pos, bool blink) {
-  uint8_t disp = pos >> 3;
-  uint8_t col = pos & 0x7;
-
-  uint8_t addr = col;
-  uint8_t dta =  blink ? 0x1 : 0x0;
-
-  hdsp_write_cycle(disp, addr, dta, LOW); // This is the only hdsp_write_cycle where flash is low.
-
-  return;
-}
-
-// write a character of the built-in character set on postion pos, pos = 0..31.
-// the character is ascii or katakana, depending on the built-in character set of the hdsp-21xx.
-
-void hdsp_write_builtin_char(uint8_t pos, uint8_t ch, bool blinking = false) {
-
-#ifdef DEBUG
-  Serial.print("builtin char pos ");
-  Serial.print(pos);
-  Serial.print(" char '");
-  Serial.print(ch);
-  Serial.println("'");
-#endif
-
-  uint8_t disp = pos >> 3;
-  uint8_t col = pos & 0x7;
-
-  uint8_t addr = col | 0x18;
-  uint8_t dta = ch & 0x7f;
-
-  // set blinking ("flash") attribute
-  hdsp_write_cycle(disp, addr, dta, HIGH);
-  hdsp_blink_char(pos, blinking);
-
-}
-
-  /*
-   * Write using user-defined characters (udc) on position pos, pos = 0...31. font_id is font number, font_id = 0..2
-   * Leftmost character on the hdsp-21xx is set to udc 0, rightmost character is set to udc 7.
-   * When a character has to be written to the display, look up the character bitmap in the font table, and update the bitmap of the udc.
-   * This provides a very complete ascii character set, including accented characters.
-   *
-   * The font table contains 4 code pages.
-   * Each code page (ascii, extended ascii, katakana, cyrillic) contains 128 characters.
-   * Character codes less than 128 are retrieved from the first code page (ascii).
-   * Character codes of 128 or higher are retrieved from extended ascii if the current font is 0,
-   * from katakana if the current font is 1, and from cyrillic if the current font is 2.
-   *
-   */
-
-void hdsp_write_user_defined_char(uint8_t pos, uint8_t ch, bool blinking = false, uint8_t font_id = 0) {
-
-#ifdef DEBUG
-  Serial.print("udc char pos ");
-  Serial.print(pos);
-  Serial.print(" char '");
-  Serial.print(ch);
-  Serial.println("'");
-#endif
-
-  uint8_t disp = pos >> 3;
-  uint8_t col = pos & 0x7;
-
-  // check inputs
-  if (ch > 255) ch = '?';
-  if (font_id > MAX_FONTS) font_id = 0;
-
-   // find offset in font table for character ch.
-  uint16_t char_idx = 0;
-  if (ch < 128)        /* the first 128 characters are the same in all code pages */
-    char_idx = ch * 7; /* glcdfont.h font arranged in 7 rows of 5 pixels per character */
-  else
-    char_idx = font_id * 128 * 7 + ch * 7;
-
-  // set position 'pos' of display to user-defined character 'pos'
-  hdsp_write_cycle(disp, 0x18 | col, 0x80 | col, HIGH); /* Figure 2 in datasheet */
-
-  // write bitmap of character ch to udc ram. first set udc address register of character
-  hdsp_write_cycle(disp, col, col, HIGH); /* Figure 3 in datasheet */
-
-  // then lookup each row of pixels of the character
-
-  for (uint8_t row = 0; row <= 6; row++)
+  // Display buffer
+  struct display_char
   {
-    uint16_t row_idx = font + char_idx + row;
-    uint8_t pixels = pgm_read_byte(row_idx); // font table in progmem
-    hdsp_write_cycle(disp, 0x08 | row, pixels, HIGH); // write row of pixels to udc ram
+    uint8_t ch;
+    // uint8_t font_id; // not supported any more, currently
+    bool blinking;
+  };
+  using Brightness = uint8_t;
+
+public:
+  static constexpr size_t num_characters = 8;
+
+  constexpr HDSP21XX(const HDSP21XXPins& pinSetup, Mcp23017& expander)
+  : mPinSetup{pinSetup}, mcp{expander}
+  {
+    // ASSUMES AN ALREADY SET UP EXPANDER, IS THIS OK???
+
+    clear_screen();
+    set_brightness(6);  // Set default brightness and allow character blinking
   }
 
-  // set blinking ("flash") attribute
-  hdsp_blink_char(pos, blinking);
-
-  return;
-}
-
-// set display brightness 0..7. Also enables character blinking.
-void hdsp_brightness(uint8_t i)
-{
-  term_brightness = i;
-  hdsp_write_cycle(ALL_DISPLAYS, 0x10, term_brightness & 0x7 | 0x08, HIGH); /* Brightness, Figure 6 in datasheet */
-}
-
-// write internal character buffer to display
-void hdsp_update() {
-  for (uint8_t i = 0; i < DISP_SIZE; i++)
-    hdsp_write_user_defined_char(i, hdsp_display[i].ch, hdsp_display[i].blinking, hdsp_display[i].font_id);
-}
-
-// erase internal character buffer and clear screen
-void hdsp_clear_screen() {
-  for (uint8_t i = 0; i < DISP_SIZE; i++) {
-    hdsp_display[i].ch = ' ';
-    hdsp_display[i].font_id = 0;
-    hdsp_display[i].blinking = false;
+  void reset()
+  {
+    if (mPinSetup.reset.has_value())
+    {
+        /* Pull HDSP-21xx reset pin low */
+        mcp.set_output_bit_for_pin(*mPinSetup.reset, false);
+        mcp.flush_output();
+        sleep_ms(1); /* Needs three clock cycles for hardware reset */
+        mcp.set_output_bit_for_pin(*mPinSetup.reset, true);
+        mcp.flush_output();
+        sleep_ms(1);
+    }
   }
-  term_cursor = 0;
-  hdsp_write_cycle(ALL_DISPLAYS, 0x10, 0x80 | term_brightness & 0x7 | 0x08, HIGH); /* Clear display, Figure 6 in datasheet */
-  delay(1); /* Needs three clock cycles (110 us) to execute, so 1 ms is more than enough */
-  return;
-}
 
-// move characters up one line
-void hdsp_scroll() {
-  for (uint8_t i = 0; i < 16; i++) {
-    hdsp_display[i] = hdsp_display[i+16];
-    hdsp_display[i+16].ch = ' ';
-    hdsp_display[i+16].font_id = 0;
-    hdsp_display[i+16].blinking = false;
+
+  /* blink character at position pos */
+  void blink_char(uint8_t pos, bool blink) {
+    uint8_t col = pos & 0x7;
+
+    uint8_t addr = col;
+    uint8_t dta =  blink ? 0x1 : 0x0;
+
+    write_cycle(addr, dta, true); // This is the only write_cycle where flash is true.
+
+    return;
   }
-  term_cursor = 16;
-  hdsp_update();
-}
 
-// print a character at current cursor position
-void hdsp_print_char(uint8_t ch, bool blinking = false, uint8_t font_id = 0) {
 
-  /* scrolling */
-  if (term_cursor >= DISP_SIZE) hdsp_scroll(); /* scroll display one line */
+  // write a character of the built-in character set on postion pos, pos = 0..31.
+  // the character is ascii or katakana, depending on the built-in character set of the hdsp-21xx.
 
-  /* write incoming character at current cursor position */
-  hdsp_write_user_defined_char(term_cursor, ch, blinking, font_id);
+  void write_builtin_char(uint8_t pos, uint8_t ch, bool blinking = false)
+  {
+      uint8_t col = pos & 0x7;
 
-  // save in buffer
-  hdsp_display[term_cursor].ch = ch;
-  hdsp_display[term_cursor].blinking = blinking;
-  hdsp_display[term_cursor].font_id = font_id;
+      uint8_t addr = col | 0x18;
+      uint8_t dta = ch & 0x7f;
 
-  term_cursor++;
+      write_cycle(addr, dta);
+      blink_char(pos, blinking);
+  }
 
-  return;
-}
+  // set display brightness 0..7. Also enables character blinking.
+  void set_brightness(uint8_t i)
+  {
+    mCurrentBrightness = i;
+    write_cycle(0x10, mCurrentBrightness & 0x7 | 0x08); /* Brightness, Figure 6 in datasheet */
+  }
 
-// print blinking question mark as error indicator
-void hdsp_error() {
-  hdsp_print_char('?', true, 0);
-  return;
-}
+  // write internal character buffer to display
+  void update() {
+    for (size_t i = 0; i < mDisplay.size(); i++)
+    {
+      write_builtin_char(i, mDisplay[i].ch, mDisplay[i].blinking);
+    }
+  }
 
-// display 'ready'
-void display_ready() {
-  const uint8_t prompt_len = 5;
-  char prompt[prompt_len] = "ready";
+    // erase internal character buffer and clear screen
+  void clear_screen() {
+    for (auto& c : mDisplay)
+    {
+      c.ch = ' ';
+      c.blinking = false;
+    }
+    write_cycle(0x10, 0x80 | mCurrentBrightness & 0x7 | 0x08); /* Clear display, Figure 6 in datasheet */
+    sleep_ms(1); /* Needs three clock cycles (110 us) to execute, so 1 ms is more than enough */
+    return;
+  }
 
-  for (uint8_t i=0; i<prompt_len; i++) hdsp_write_user_defined_char(i, prompt[i], false, 0);
+private:
+  // low-level routines
 
-  term_cursor = 31; // force scroll
+  /* set hdsp-21xx address and data bus values on bus extender */
+  void set_addr_dta(uint8_t addr, uint8_t dta)
+  {
+    // address
+    for (size_t i = 0; i < mPinSetup.address.size(); i++)
+    {
+      mcp.set_output_bit_for_pin(mPinSetup.address[i], addr & (1 << i));
+    }
+    // data
+    for (size_t i = 0; i < mPinSetup.data.size(); i++)
+    {
+      mcp.set_output_bit_for_pin(mPinSetup.data[i], addr & (1 << i));
+    }
+    mcp.flush_output();
+  }
 
-  return;
-}
+  // write one byte on hdsp bus
+  // disp: display number, 0..3
+  // addr: address
+  // dta: data
+  // flash: if true, access "flash" memory to store blinking attribute.
+  void write_cycle(uint8_t addr, uint8_t dta, bool flash = false)
+  {
+    mcp.set_output_bit_for_pin(mPinSetup.flash, !flash);
+    set_addr_dta(addr, dta);
+    sleep_ms(1);
+    mcp.set_output_bit_for_pin(mPinSetup.chipEnable, false);
+    mcp.flush_output();
+    sleep_ms(1);
+    mcp.set_output_bit_for_pin(mPinSetup.write, false);
+    mcp.flush_output();
+    sleep_ms(1);
+    mcp.set_output_bit_for_pin(mPinSetup.write, true);
+    sleep_ms(1);
+    mcp.set_output_bit_for_pin(mPinSetup.chipEnable, true);
+    mcp.set_output_bit_for_pin(mPinSetup.flash, true);
+    mcp.flush_output();
+    sleep_ms(1);
+  }
 
-void display_test() {
-  for (uint8_t i=0; i<32; i++) hdsp_write_builtin_char(i, 'A'+i, false);  // depending upon display model, this shows ascii or katakana
-  delay(2000);
-  for (uint8_t i=0; i<32; i++) hdsp_write_builtin_char(i, 'a'+i, false);  // depending upon display model, this shows lower case ascii or upper case ascii
-  delay(2000);
-  for (uint8_t i=0; i<32; i++) hdsp_write_user_defined_char(i, 'a'+i, false); // lower case ascii
-  delay(2000);
-  for (uint8_t i=0; i<8; i++) hdsp_write_user_defined_char(i, 'a'+i, false, 0); // ascii
-  for (uint8_t i=0; i<8; i++) hdsp_write_user_defined_char(i + 8, 0xc0+i, false, 0); // accented characters
-  for (uint8_t i=0; i<8; i++) hdsp_write_user_defined_char(i + 16,0xc0+i, false, 1); // katakana
-  for (uint8_t i=0; i<8; i++) hdsp_write_user_defined_char(i + 24,0xc0+i, false, 2); // cyrillic
-  delay(2000);
-  return;
-}
+  // print blinking question mark as error indicator
+  void error() {
+    write_builtin_char(0, '?', true);
+    return;
+  }
 
-// run once at boot
-void setup() {
 
-  /* pins on atmega */
-  pinMode(LED_CE0, OUTPUT);
-  pinMode(LED_CE1, OUTPUT);
-  pinMode(LED_CE2, OUTPUT);
-  pinMode(LED_CE3, OUTPUT);
-  pinMode(LED_CLK, OUTPUT);
-  pinMode(LED_FL, OUTPUT);
-  pinMode(LED_RD, OUTPUT);
-  pinMode(LED_RST, OUTPUT);
-  pinMode(LED_WR, OUTPUT);
-  digitalWrite(LED_CE0, HIGH);
-  digitalWrite(LED_CE1, HIGH);
-  digitalWrite(LED_CE2, HIGH);
-  digitalWrite(LED_CE3, HIGH);
-  digitalWrite(LED_FL,  HIGH);
-  digitalWrite(LED_RD,  HIGH);
-  digitalWrite(LED_RST, HIGH);
-  digitalWrite(LED_WR,  HIGH);
-
-  // Serial port
-  Serial.begin(BAUD_RATE);
-
-  // The following line is magic needed for pgm_read_byte() to function.
-  if (millis() > 100000L) Serial.println((uint16_t) font, HEX);
-
-  // i2c port extender
-  mcp_init();
-
-  // display clock
-  hdsp_init_clk();
-
-  // clear display
-  hdsp_reset();
-  hdsp_clear_screen();
-  hdsp_brightness(DEFAULT_BRIGHTNESS);  // Set default brightness and allow character blinking
-
-  // ready!
-  display_ready();
-
-  return;
-}
-
+  HDSP21XXPins mPinSetup;
+  Mcp23017& mcp;
+  std::array<display_char, num_characters> mDisplay;
+  Brightness mCurrentBrightness = 5;  // up to 7! Wow!
 };

@@ -1,4 +1,5 @@
 #include <include/config.hpp>
+#include <lib/hdsp_21xx.hpp>
 #include <lib/bme280.hpp>
 #include <lib/led.hpp>
 #include <mcp23017.h>
@@ -74,6 +75,12 @@ int main() {
 
     Mcp23017 expander{setupMcpI2c(), displayPortexpanderAddr};
     setupExpander(expander);
+    HDSP21XX display{displayPinSetup, expander};
+
+    display.write_builtin_char(0, 'b');
+    display.write_builtin_char(1, 'o');
+    display.write_builtin_char(2, 'b');
+    sleep_ms(1000);
     // mcpTest(expander);
 
     // TODO: Move obviously
