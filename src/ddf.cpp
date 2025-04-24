@@ -36,13 +36,12 @@ i2c_inst_t* setupTempI2c()
 
 i2c_inst_t* setupMcpI2c()
 {
-    // FIXME: Is currently wired wrong. Should be i2c0!
-    // 4, 5 ....
-    static constexpr unsigned mcp_sda = 2;
-    static constexpr unsigned mcp_scl = 3;
+    static constexpr unsigned mcp_sda = 4;
+    static constexpr unsigned mcp_scl = 5;
 
-    setupI2C(i2c1, mcp_sda, mcp_scl, 100 * 1000);
-    return i2c1;
+    // worked with 100kHz. Increase if more is needed.
+    setupI2C(i2c0, mcp_sda, mcp_scl, 100 * 1000);
+    return i2c0;
 }
 
 

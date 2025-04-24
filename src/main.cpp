@@ -39,18 +39,82 @@ void printCsvHeader()
     printf ("\n");
 }
 
+// TODO: Return value to check once something does not work?
+void
+setupExpander(Mcp23017& expander)
+{
+    expander.set_io_direction(0);
+    expander.set_all_output_bits(0);
+}
+
+void
+[[noreturn]]
+mcpTest(Mcp23017& mcp)
+{
+    bool on = true;
+    for (size_t round = 0; ; round++)
+    {
+        for (size_t pin = 0; pin < 16; pin++)
+        {
+            printf ("Pin %d %s\n", pin, on ? "on" : "off");
+            mcp.set_output_bit_for_pin(pin, on);
+            mcp.flush_output();
+            sleep_ms(500);
+        }
+        on = !on;
+    }
+}
+
 int main() {
     setup_default_uart();
     stdio_init_all();
 
-    OnboardLED led{16};
+    WS2812LED led{onboardLedNr};
     Status status{led, 0x03};
 
-    i2c_inst_t* mcpI2c = setupMcpI2c();
-    while(true)
+    Mcp23017 expander{setupMcpI2c(), displayPortexpanderAddr};
+    setupExpander(expander);
+    // mcpTest(expander);
+
+    // TODO: Move obviously
+    struct ExpanderPin
     {
-        busScan(mcpI2c);
-        sleep_ms(1000);
+        void
+        set(bool value)
+        {
+            expander.set_output_bit_for_pin(mPinNr, value);
+        }
+
+        Mcp23017& expander;
+        int mPinNr;
+    };
+    static constexpr uint8_t A = 0;
+    static constexpr uint8_t B = 8;
+
+    ExpanderPin ce {expander, B+7};
+    ExpanderPin a4 {expander, B+4};
+    ExpanderPin fl {expander, B+6};
+    ExpanderPin d6 {expander, A+6};
+
+    for (size_t i = 0; ; i++)
+    {
+        static constexpr size_t magicWaitValue_ms = 400;
+        printf ("selftest %d:\n", i);
+        ce.set(false);
+        expander.flush_output();
+        sleep_ms(magicWaitValue_ms);
+        a4.set(true);
+        fl.set(true);
+        d6.set(true);
+        expander.flush_output();
+        ce.set(true);  // this should apply the command
+        expander.flush_output();
+        printf ("sent.\n");
+        for (size_t second = 0; second <= 5; second++)
+        {
+            printf("waiting gracefully for test end %d\n", second);
+            sleep_ms(1000);
+        }
     }
 
     BME280 bme{setupTempI2c()};
