@@ -231,11 +231,28 @@ main() {
 
             // --- print current time to screen ---
             {
+                enum class DisplayState
+                {
+                    cEET,
+                    drift
+                };
                 std::array<char, display.num_characters> buffer;
-                const auto [end, code] = std::to_chars(buffer.begin(), buffer.end(), currentEstimatedElapsedTime / 1000000);
+                const auto cEET_s = currentEstimatedElapsedTime / 1000000;
+                const float currentDrift_s = ((time_us_64() - currentEstimatedElapsedTime) / 1000) / 1000.;
+                const DisplayState currentState = cEET_s % 10 == 0 ? DisplayState::drift : DisplayState::cEET;
+
+                const float numberToShow = currentState == DisplayState::cEET ? cEET_s : currentDrift_s;
+
+                const auto [end, code] = std::to_chars(buffer.begin(), buffer.end(), numberToShow);
+
                 if (code == std::errc())    // this is considered a success. meh.
                 {
                     display.write_string_oneshot(std::string_view{buffer.begin(), end}, {.alignment = HDSP21XX::StringOptions::Alignment::right});
+                    if (currentState == DisplayState::drift)
+                    {
+                        static constexpr char delta = 0x07;
+                        display.write_builtin_char(0, delta, true);
+                    }
                 }
                 else
                 {
