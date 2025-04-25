@@ -40,14 +40,6 @@ void printCsvHeader()
     printf ("\n");
 }
 
-// TODO: Return value to check once something does not work?
-void
-setupExpander(Mcp23017& expander)
-{
-    expander.set_io_direction(0);
-    expander.set_all_output_bits(0);
-}
-
 void
 [[noreturn]]
 mcpTest(Mcp23017& mcp)
@@ -66,24 +58,9 @@ mcpTest(Mcp23017& mcp)
     }
 }
 
-int main() {
-    setup_default_uart();
-    stdio_init_all();
-
-    WS2812LED led{onboardLedNr};
-    Status status{led, 0x03};
-
-    Mcp23017 expander{setupMcpI2c(), displayPortexpanderAddr};
-    setupExpander(expander);
-    HDSP21XX display{displayPinSetup, expander};
-
-    display.write_builtin_char(0, 'b');
-    display.write_builtin_char(1, 'o');
-    display.write_builtin_char(2, 'b');
-    sleep_ms(1000);
-    // mcpTest(expander);
-
-    // TODO: Move obviously
+void
+minimalHDSPTest(Mcp23017& expander)
+{
     struct ExpanderPin
     {
         void
@@ -123,6 +100,26 @@ int main() {
             sleep_ms(1000);
         }
     }
+}
+
+int
+main() {
+    setup_default_uart();
+    stdio_init_all();
+
+    WS2812LED led{onboardLedNr};
+    Status status{led, 0x03};
+
+    Mcp23017 expander{setupMcpI2c(), displayPortexpanderAddr};
+    // mcpTest(expander);
+    // minimalHDSPTest(expander);
+    HDSP21XX display{displayPinSetup, expander};
+
+    display.write_builtin_char(0, 0);
+    display.write_builtin_char(1, 1);
+    display.write_builtin_char(2, 0xFF);
+    return 0;
+
 
     BME280 bme{setupTempI2c()};
 

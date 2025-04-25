@@ -78,7 +78,8 @@ public:
   constexpr HDSP21XX(const HDSP21XXPins& pinSetup, Mcp23017& expander)
   : mPinSetup{pinSetup}, mcp{expander}
   {
-    // ASSUMES AN ALREADY SET UP EXPANDER, IS THIS OK???
+    mcp.set_io_direction(0);
+    mcp.set_all_output_bits(0);
 
     clear_screen();
     set_brightness(6);  // Set default brightness and allow character blinking
@@ -112,7 +113,7 @@ public:
   }
 
 
-  // write a character of the built-in character set on postion pos, pos = 0..31.
+  // write a character of the built-in character set on postion pos
   // the character is ascii or katakana, depending on the built-in character set of the hdsp-21xx.
 
   void write_builtin_char(uint8_t pos, uint8_t ch, bool blinking = false)
@@ -167,7 +168,7 @@ private:
     // data
     for (size_t i = 0; i < mPinSetup.data.size(); i++)
     {
-      mcp.set_output_bit_for_pin(mPinSetup.data[i], addr & (1 << i));
+      mcp.set_output_bit_for_pin(mPinSetup.data[i], dta & (1 << i));
     }
     mcp.flush_output();
   }
