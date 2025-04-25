@@ -60,16 +60,35 @@ struct HDSP21XXPins
   std::optional<Pin> reset; // not connected in my setup
 };
 
+// this is a workaround for a compiler-bug (?)
+//https://stackoverflow.com/questions/53408962/try-to-understand-compiler-error-message-default-member-initializer-required-be
+namespace hdsp21xx
+{
+  struct StringOptions
+  {
+    enum class Alignment
+    {
+      left,
+      right
+      // center // not needed, so not implemented
+    };
+
+    bool blink = false;
+    Alignment alignment = Alignment::left;
+  };
+}
+
 // This was downgraded to only work for one single display.
 // template <HDSP21XXPins pinSetup> // sadly, this was over my compiler's abilities because of std::optional
 class HDSP21XX
 {
   // we will never delay so much as a second
   using Microseconds = uint32_t;
-  static constexpr Microseconds clearScreenHoldoff = 110 + 10; // 10 for safety
+  static constexpr Microseconds clearScreenHoldoff = 110 + 100; // extra, for safety! :D
   static constexpr Microseconds dataApply = 1;  // I did not find a value in the datasheet
 
 public:
+  using StringOptions = hdsp21xx::StringOptions;
   using Brightness = uint8_t;
   static constexpr Brightness maxBrightness = 7;
   static constexpr size_t num_characters = 8;
@@ -81,7 +100,7 @@ public:
     mcp.set_all_output_bits(0);
 
     clear_screen();
-    set_brightness(6);  // Set default brightness and allow character blinking
+    set_brightness(5);  // Set default brightness and allow character blinking
   }
 
   void reset()
@@ -124,11 +143,22 @@ public:
   }
 
   void
-  write_string_oneshot(const std::string_view& str)
+  write_string_oneshot(const std::string_view& str, const StringOptions& options = StringOptions{})
   {
-    for (size_t i = 0; i < str.size() && i <= num_characters; i++)
+    const std::string_view sanitizedStr = str.substr(0, num_characters);
+    const size_t startOfString = options.alignment == StringOptions::Alignment::left ? 0 : num_characters - sanitizedStr.size();
+
+    for (size_t i = 0; i < startOfString; i++)
     {
-      write_builtin_char(i, str[i]);
+      write_builtin_char(i, ' ');
+    }
+    for (size_t i = startOfString; i < startOfString + sanitizedStr.size(); i++)
+    {
+      write_builtin_char(i, sanitizedStr[i - startOfString], options.blink);
+    }
+    for (size_t i = startOfString + sanitizedStr.size(); i < num_characters; i++)
+    {
+      write_builtin_char(i, ' ');
     }
   }
 
@@ -146,8 +176,9 @@ public:
   }
     // erase internal character buffer and clear screen
   void clear_screen() {
+    sleep_us(1);  // tjoa
     write_cycle(0x10, 0x80 | mCurrentBrightness & 0x7 | 0x08); /* Clear display, Figure 6 in datasheet */
-    sleep_us(clearScreenHoldoff); /* Needs three clock cycles (110 us) to execute, so 1 ms is more than enough */
+    sleep_us(clearScreenHoldoff);
     return;
   }
 

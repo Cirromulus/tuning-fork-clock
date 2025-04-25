@@ -16,6 +16,7 @@
 #include <cinttypes>   // uhg, oldschool
 #include <array>
 #include <string_view>
+#include <charconv>
 
 using namespace std::literals;
 
@@ -33,6 +34,7 @@ static volatile bool shouldSampleEnvironment = false;
 repeating_timer_t environment_sample_timer;
 
 
+// TODO: Make wrapping class that does the logging prints
 void printCsvHeader()
 {
     printf ("Period duration [us / %lu]", periodsPerMeasurement);
@@ -118,18 +120,7 @@ main() {
     // minimalHDSPTest(expander);
     HDSP21XX display{displayPinSetup, expander};
 
-    display.write_string_oneshot("HANSBOB"sv);
-
-    while(true)
-    {
-        for (HDSP21XX::Brightness i = 0; i <= HDSP21XX::maxBrightness; i++)
-        {
-            printf("setting brightness to %d\n", i);
-            display.write_builtin_char(7, '0' + i);
-            display.set_brightness(i);
-            sleep_ms(500);
-        }
-    }
+    display.write_string_oneshot("Startup"sv);
 
     BME280 bme{setupTempI2c()};
 
@@ -168,26 +159,29 @@ main() {
         Damper{dampFactor}
     };
 
-    // is here because of no signal not working on the first occurrence dunno
-    status.noSignal();
     while(true)
     {
         OscCount oscCount = 0;
         if (!queue_try_remove(&period_fifo, &oscCount))
         {
+            // There is no new oscCount to get
             const auto diff = absolute_time_diff_us(lastValidOscSampleTime, get_absolute_time());
             if (diff > expectedMaxCount)
             {
                 // ugly enough, without the printf, it will not set the led
                 // ON THE FIRST OCCURENCE. Ich habe Feierabend, just hack around it in led init
+                // (BTW if we print this, it works again...)
                 // printf("%lld\n", diff);
+                display.write_string_oneshot("NoSignal", {.blink = true});
                 status.noSignal();
             }
-            // skip and retry
+            // No new updates, but now and here would be time to do something
+            // TODO: make this more understandable
             continue;
         }
         else
         {
+            // We got a sample
             lastValidOscSampleTime = get_absolute_time();
         }
 
@@ -204,6 +198,7 @@ main() {
             }
             else
             {
+                display.write_string_oneshot("Err Temp", {.blink = true});
                 status.invalidTempReading();
             }
         }
@@ -222,15 +217,35 @@ main() {
         {
             // we never had a valid reading
             status.invalidTempReading();
+            display.write_string_oneshot("Err!Temp", {.blink = true});
             continue;
         }
 
         {
             // we effectively skipped all unexpected samples
 
+            // ------ The Interesting Thing ------
             timeEstimator.consumeNextMeasurement(lastEnvironmentSample->temperature_centidegree);
             const auto currentEstimatedElapsedTime = timeEstimator.getEstimatedElapsedTime();
+            // -----------------------------------
 
+            // --- print current time to screen ---
+            {
+                std::array<char, display.num_characters> buffer;
+                const auto [end, code] = std::to_chars(buffer.begin(), buffer.end(), currentEstimatedElapsedTime / 1000000);
+                if (code == std::errc())    // this is considered a success. meh.
+                {
+                    display.write_string_oneshot(std::string_view{buffer.begin(), end}, {.alignment = HDSP21XX::StringOptions::Alignment::right});
+                }
+                else
+                {
+                    display.write_string_oneshot("str err", {.blink = true});
+                }
+
+            }
+            // ------------------------------------
+
+            // TODO: Make wrapping class that does the logging prints -----
             if (currentLine >= printHeaderEveryNLines)
             {
                 printCsvHeader();
@@ -258,8 +273,9 @@ main() {
             // );
 
             printf("\n");
-
             currentLine++;
+            // TODO: Make wrapping class that does the logging prints -----
+
         }
     }
 
