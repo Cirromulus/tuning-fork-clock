@@ -15,6 +15,9 @@
 #include <stdio.h>
 #include <cinttypes>   // uhg, oldschool
 #include <array>
+#include <string_view>
+
+using namespace std::literals;
 
 bool timer_callback(repeating_timer_t *rt);
 
@@ -115,11 +118,18 @@ main() {
     // minimalHDSPTest(expander);
     HDSP21XX display{displayPinSetup, expander};
 
-    display.write_builtin_char(0, 0);
-    display.write_builtin_char(1, 1);
-    display.write_builtin_char(2, 0xFF);
-    return 0;
+    display.write_string_oneshot("HANSBOB"sv);
 
+    while(true)
+    {
+        for (HDSP21XX::Brightness i = 0; i <= HDSP21XX::maxBrightness; i++)
+        {
+            printf("setting brightness to %d\n", i);
+            display.write_builtin_char(7, '0' + i);
+            display.set_brightness(i);
+            sleep_ms(500);
+        }
+    }
 
     BME280 bme{setupTempI2c()};
 

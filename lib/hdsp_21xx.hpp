@@ -44,7 +44,8 @@
 
 #include <mcp23017.h>
 #include <array>
-#include <optional>  // Lol this will never be prod enough
+#include <optional>
+#include <string_view>
 
 struct HDSP21XXPins
 {
@@ -63,16 +64,14 @@ struct HDSP21XXPins
 // template <HDSP21XXPins pinSetup> // sadly, this was over my compiler's abilities because of std::optional
 class HDSP21XX
 {
-  // Display buffer
-  struct display_char
-  {
-    uint8_t ch;
-    // uint8_t font_id; // not supported any more, currently
-    bool blinking;
-  };
-  using Brightness = uint8_t;
+  // we will never delay so much as a second
+  using Microseconds = uint32_t;
+  static constexpr Microseconds clearScreenHoldoff = 110 + 10; // 10 for safety
+  static constexpr Microseconds dataApply = 1;  // I did not find a value in the datasheet
 
 public:
+  using Brightness = uint8_t;
+  static constexpr Brightness maxBrightness = 7;
   static constexpr size_t num_characters = 8;
 
   constexpr HDSP21XX(const HDSP21XXPins& pinSetup, Mcp23017& expander)
@@ -99,7 +98,6 @@ public:
     }
   }
 
-
   /* blink character at position pos */
   void blink_char(uint8_t pos, bool blink) {
     uint8_t col = pos & 0x7;
@@ -112,10 +110,8 @@ public:
     return;
   }
 
-
   // write a character of the built-in character set on postion pos
   // the character is ascii or katakana, depending on the built-in character set of the hdsp-21xx.
-
   void write_builtin_char(uint8_t pos, uint8_t ch, bool blinking = false)
   {
       uint8_t col = pos & 0x7;
@@ -127,30 +123,31 @@ public:
       blink_char(pos, blinking);
   }
 
+  void
+  write_string_oneshot(const std::string_view& str)
+  {
+    for (size_t i = 0; i < str.size() && i <= num_characters; i++)
+    {
+      write_builtin_char(i, str[i]);
+    }
+  }
+
+  void
+  write_string_running(const std::string_view& str, size_t us_per_wrapped_char)
+  {
+    // TODO
+  }
+
   // set display brightness 0..7. Also enables character blinking.
   void set_brightness(uint8_t i)
   {
-    mCurrentBrightness = i;
+    mCurrentBrightness = maxBrightness - i;
     write_cycle(0x10, mCurrentBrightness & 0x7 | 0x08); /* Brightness, Figure 6 in datasheet */
   }
-
-  // write internal character buffer to display
-  void update() {
-    for (size_t i = 0; i < mDisplay.size(); i++)
-    {
-      write_builtin_char(i, mDisplay[i].ch, mDisplay[i].blinking);
-    }
-  }
-
     // erase internal character buffer and clear screen
   void clear_screen() {
-    for (auto& c : mDisplay)
-    {
-      c.ch = ' ';
-      c.blinking = false;
-    }
     write_cycle(0x10, 0x80 | mCurrentBrightness & 0x7 | 0x08); /* Clear display, Figure 6 in datasheet */
-    sleep_ms(1); /* Needs three clock cycles (110 us) to execute, so 1 ms is more than enough */
+    sleep_us(clearScreenHoldoff); /* Needs three clock cycles (110 us) to execute, so 1 ms is more than enough */
     return;
   }
 
@@ -180,21 +177,18 @@ private:
   // flash: if true, access "flash" memory to store blinking attribute.
   void write_cycle(uint8_t addr, uint8_t dta, bool flash = false)
   {
+    // we expect chipEnable to be active low,
+    // and to be always set to true afterwards by our functions
     mcp.set_output_bit_for_pin(mPinSetup.flash, !flash);
-    set_addr_dta(addr, dta);
-    sleep_ms(1);
+    mcp.set_output_bit_for_pin(mPinSetup.write, false);
+    set_addr_dta(addr, dta);  // this also flushes
     mcp.set_output_bit_for_pin(mPinSetup.chipEnable, false);
     mcp.flush_output();
-    sleep_ms(1);
-    mcp.set_output_bit_for_pin(mPinSetup.write, false);
-    mcp.flush_output();
-    sleep_ms(1);
+    sleep_us(dataApply);
     mcp.set_output_bit_for_pin(mPinSetup.write, true);
-    sleep_ms(1);
     mcp.set_output_bit_for_pin(mPinSetup.chipEnable, true);
     mcp.set_output_bit_for_pin(mPinSetup.flash, true);
     mcp.flush_output();
-    sleep_ms(1);
   }
 
   // print blinking question mark as error indicator
@@ -206,6 +200,5 @@ private:
 
   HDSP21XXPins mPinSetup;
   Mcp23017& mcp;
-  std::array<display_char, num_characters> mDisplay;
   Brightness mCurrentBrightness = 5;  // up to 7! Wow!
 };
