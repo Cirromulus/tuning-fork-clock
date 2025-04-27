@@ -1,11 +1,11 @@
 #include <include/config.hpp>
-#include <lib/hdsp_21xx.hpp>
 #include <lib/bme280.hpp>
 #include <lib/led.hpp>
 #include <mcp23017.h>
 
 #include "estimator.hpp"
 #include "ddf.hpp"
+#include "display.hpp"
 
 #include <pico/stdlib.h>
 #include <pico/util/queue.h>
@@ -15,8 +15,7 @@
 #include <stdio.h>
 #include <cinttypes>   // uhg, oldschool
 #include <array>
-#include <string_view>
-#include <charconv>
+
 
 using namespace std::literals;
 
@@ -118,9 +117,9 @@ main() {
     Mcp23017 expander{setupMcpI2c(), displayPortexpanderAddr};
     // mcpTest(expander);
     // minimalHDSPTest(expander);
-    HDSP21XX display{displayPinSetup, expander};
+    ClockDisplay display{expander, displayPinSetup};
 
-    display.write_string_oneshot("Startup"sv);
+    display.showInfo("Startup");
 
     BME280 bme{setupTempI2c()};
 
@@ -130,6 +129,7 @@ main() {
     while (!bme.init())
     {
         printf("Could not init BME280.\n");
+        display.showError("BME Err");
         sleep_ms(1000);
     }
 
@@ -137,6 +137,7 @@ main() {
     if (!add_repeating_timer_ms(-2000, timer_callback, NULL, &environment_sample_timer))
     {
         printf("Failed to add enviroment sampling timer\n");
+        display.showError("Tim Err");
     }
 
 
@@ -168,11 +169,7 @@ main() {
             const auto diff = absolute_time_diff_us(lastValidOscSampleTime, get_absolute_time());
             if (diff > expectedMaxCount)
             {
-                // ugly enough, without the printf, it will not set the led
-                // ON THE FIRST OCCURENCE. Ich habe Feierabend, just hack around it in led init
-                // (BTW if we print this, it works again...)
-                // printf("%lld\n", diff);
-                display.write_string_oneshot("NoSignal", {.blink = true});
+                display.showError("NoSignal");
                 status.noSignal();
             }
             // No new updates, but now and here would be time to do something
@@ -198,7 +195,7 @@ main() {
             }
             else
             {
-                display.write_string_oneshot("Err Temp", {.blink = true});
+                display.showError("Err Temp");
                 status.invalidTempReading();
             }
         }
@@ -217,7 +214,7 @@ main() {
         {
             // we never had a valid reading
             status.invalidTempReading();
-            display.write_string_oneshot("Err!Temp", {.blink = true});
+            display.showError("Err!Temp");
             continue;
         }
 
@@ -227,39 +224,14 @@ main() {
             // ------ The Interesting Thing ------
             timeEstimator.consumeNextMeasurement(lastEnvironmentSample->temperature_centidegree);
             const auto currentEstimatedElapsedTime = timeEstimator.getEstimatedElapsedTime();
+            const auto currentDrift_us = (time_us_64() - currentEstimatedElapsedTime);
             // -----------------------------------
 
+
             // --- print current time to screen ---
-            {
-                enum class DisplayState
-                {
-                    cEET,
-                    drift
-                };
-                std::array<char, display.num_characters> buffer;
-                const auto cEET_s = currentEstimatedElapsedTime / 1000000;
-                const float currentDrift_s = ((time_us_64() - currentEstimatedElapsedTime) / 1000) / 1000.;
-                const DisplayState currentState = cEET_s % 10 == 0 ? DisplayState::drift : DisplayState::cEET;
-
-                const float numberToShow = currentState == DisplayState::cEET ? cEET_s : currentDrift_s;
-
-                const auto [end, code] = std::to_chars(buffer.begin(), buffer.end(), numberToShow);
-
-                if (code == std::errc())    // this is considered a success. meh.
-                {
-                    display.write_string_oneshot(std::string_view{buffer.begin(), end}, {.alignment = HDSP21XX::StringOptions::Alignment::right});
-                    if (currentState == DisplayState::drift)
-                    {
-                        static constexpr char delta = 0x07;
-                        display.write_builtin_char(0, delta, true);
-                    }
-                }
-                else
-                {
-                    display.write_string_oneshot("str err", {.blink = true});
-                }
-
-            }
+            display.setCurrentElapsedTime_us(currentEstimatedElapsedTime);
+            display.setCurrentDrift_us(currentDrift_us);
+            display.update();
             // ------------------------------------
 
             // TODO: Make wrapping class that does the logging prints -----
@@ -279,7 +251,7 @@ main() {
             }
 
             printf(",%lld", currentEstimatedElapsedTime);
-            printf(",%lld", time_us_64() - currentEstimatedElapsedTime);
+            printf(",%lld", currentDrift_us);
 
             // now the derived values
             // printf(",%f,%ld,%lu,%lu",
