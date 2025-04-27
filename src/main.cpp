@@ -6,6 +6,8 @@
 #include "estimator.hpp"
 #include "ddf.hpp"
 #include "display.hpp"
+#include "csvlogger.hpp"
+// #include "tests.hpp"
 
 #include <pico/stdlib.h>
 #include <pico/util/queue.h>
@@ -19,9 +21,17 @@
 
 using namespace std::literals;
 
-bool timer_callback(repeating_timer_t *rt);
+// Timer for enviroment sampling (i.e. Temp)
+bool
+env_sample_callback(repeating_timer_t *rt);
 
-void osc_callback(uint gpio, uint32_t events);
+// the forc cycle counter
+void
+fork_osc_callback(uint gpio, uint32_t events);
+
+// this will be fed by external reference or internal Pico-OSC
+uint64_t
+getCurrentReferenceTicks();
 
 // --------------
 
@@ -29,82 +39,11 @@ void osc_callback(uint gpio, uint32_t events);
 static OscCount oscCount = 0;
 queue_t period_fifo;
 
+// will be set to true by environment samle timer
 static volatile bool shouldSampleEnvironment = false;
 repeating_timer_t environment_sample_timer;
 
 
-// TODO: Make wrapping class that does the logging prints
-void printCsvHeader()
-{
-    printf ("Period duration [us / %lu]", periodsPerMeasurement);
-    printf (", Temperature [0.01 DegC], Pressure [2^(-8) Pa], Humidity [2^(-10) %RH]");
-    // printf (", Current Temperature Estimation [0.01 DegC], Current Period Estimation [us]");
-    printf (", Estimated elapsed time [us]");
-    printf (", Difference to internal time [us]");
-    printf ("\n");
-}
-
-void
-[[noreturn]]
-mcpTest(Mcp23017& mcp)
-{
-    bool on = true;
-    for (size_t round = 0; ; round++)
-    {
-        for (size_t pin = 0; pin < 16; pin++)
-        {
-            printf ("Pin %d %s\n", pin, on ? "on" : "off");
-            mcp.set_output_bit_for_pin(pin, on);
-            mcp.flush_output();
-            sleep_ms(500);
-        }
-        on = !on;
-    }
-}
-
-void
-minimalHDSPTest(Mcp23017& expander)
-{
-    struct ExpanderPin
-    {
-        void
-        set(bool value)
-        {
-            expander.set_output_bit_for_pin(mPinNr, value);
-        }
-
-        Mcp23017& expander;
-        int mPinNr;
-    };
-    static constexpr uint8_t A = 0;
-    static constexpr uint8_t B = 8;
-
-    ExpanderPin ce {expander, B+7};
-    ExpanderPin a4 {expander, B+4};
-    ExpanderPin fl {expander, B+6};
-    ExpanderPin d6 {expander, A+6};
-
-    for (size_t i = 0; ; i++)
-    {
-        static constexpr size_t magicWaitValue_ms = 400;
-        printf ("selftest %d:\n", i);
-        ce.set(false);
-        expander.flush_output();
-        sleep_ms(magicWaitValue_ms);
-        a4.set(true);
-        fl.set(true);
-        d6.set(true);
-        expander.flush_output();
-        ce.set(true);  // this should apply the command
-        expander.flush_output();
-        printf ("sent.\n");
-        for (size_t second = 0; second <= 5; second++)
-        {
-            printf("waiting gracefully for test end %d\n", second);
-            sleep_ms(1000);
-        }
-    }
-}
 
 int
 main() {
@@ -118,13 +57,13 @@ main() {
     // mcpTest(expander);
     // minimalHDSPTest(expander);
     ClockDisplay display{expander, displayPinSetup};
-
     display.showInfo("Startup");
 
     BME280 bme{setupTempI2c()};
-
     // this will block forever
     // bmeTest(bme);
+
+    CSVLogger logger{};   // with default config
 
     while (!bme.init())
     {
@@ -134,40 +73,41 @@ main() {
     }
 
     // negative timeout means exact delay (rather than delay between callbacks)
-    if (!add_repeating_timer_ms(-2000, timer_callback, NULL, &environment_sample_timer))
+    if (!add_repeating_timer_ms(-2000, env_sample_callback, NULL, &environment_sample_timer))
     {
         printf("Failed to add enviroment sampling timer\n");
         display.showError("Tim Err");
     }
 
 
-    queue_init(&period_fifo, sizeof(OscCount), fifoSize);
+    queue_init(&period_fifo, sizeof(OscCount), config::fifoSize);
     gpio_init(GPIO_WATCH_PIN);
     gpio_set_pulls(GPIO_WATCH_PIN, false, true);    // "Weak" pulldown
-    gpio_set_irq_enabled_with_callback(GPIO_WATCH_PIN, GPIO_IRQ_EDGE_RISE, true, &osc_callback);
+    gpio_set_irq_enabled_with_callback(GPIO_WATCH_PIN, GPIO_IRQ_EDGE_RISE, true, &fork_osc_callback);
 
     // -- init done --
 
-    static constexpr size_t printHeaderEveryNLines = 60 * (periodsPerMeasurement / expectedOscFreq);
-    size_t currentLine = printHeaderEveryNLines;
+    static constexpr size_t printHeaderEveryNLines = 60 * (config::periodsPerMeasurement / config::expectedOscFreq);
 
     auto lastEnvironmentSample = bme.readEnvironment();
     auto lastValidOscSampleTime = get_absolute_time();
 
     Estimator timeEstimator{
-        PolynomCalc{temperatureCalibrationPolynom},
-        PolynomCalc{tempRateCalibrationPolynom},
-        Damper{dampFactor}
+        PolynomCalc{config::temperatureCalibrationPolynom},
+        PolynomCalc{config::tempRateCalibrationPolynom},
+        Damper{config::dampFactor}
     };
 
+    // main bigloop: get samples, estimate, print.
     while(true)
     {
+        // Get new fork osc count from counter ITR
         OscCount oscCount = 0;
         if (!queue_try_remove(&period_fifo, &oscCount))
         {
             // There is no new oscCount to get
             const auto diff = absolute_time_diff_us(lastValidOscSampleTime, get_absolute_time());
-            if (diff > expectedMaxCount)
+            if (diff > config::expectedMaxCount)
             {
                 display.showError("NoSignal");
                 status.noSignal();
@@ -187,6 +127,7 @@ main() {
 
         if (shouldSampleEnvironment)
         {
+            // somewhen the timer fired
             const auto maybeCurrentEnv = bme.readEnvironment();
             if (maybeCurrentEnv)
             {
@@ -200,12 +141,13 @@ main() {
             }
         }
 
-        if (oscCount > expectedMaxCount)
+        // Handling sanity of measured values
+        if (oscCount > config::expectedMaxCount)
         {
             status.tooLowFrequency();
             continue;
         }
-        if (oscCount < expectedMinCount)
+        if (oscCount < config::expectedMinCount)
         {
             status.tooHighFrequency();
             continue;
@@ -219,7 +161,8 @@ main() {
         }
 
         {
-            // we effectively skipped all unexpected samples
+            // we effectively skipped all unexpected samples.
+            // Now: Estimate! and print.
 
             // ------ The Interesting Thing ------
             timeEstimator.consumeNextMeasurement(lastEnvironmentSample->temperature_centidegree);
@@ -227,60 +170,41 @@ main() {
             const auto currentDrift_us = (time_us_64() - currentEstimatedElapsedTime);
             // -----------------------------------
 
-
             // --- print current time to screen ---
             display.setCurrentElapsedTime_us(currentEstimatedElapsedTime);
             display.setCurrentDrift_us(currentDrift_us);
             display.update();
             // ------------------------------------
 
-            // TODO: Make wrapping class that does the logging prints -----
-            if (currentLine >= printHeaderEveryNLines)
-            {
-                printCsvHeader();
-                currentLine = 0;
-            }
-
-            printf("%lu", oscCount);
-
-            {
-                printf(",%ld,%lu,%lu",
-                    lastEnvironmentSample->temperature_centidegree,
-                    lastEnvironmentSample->pressure_q23_8,
-                    lastEnvironmentSample->humidity_q22_10);
-            }
-
-            printf(",%lld", currentEstimatedElapsedTime);
-            printf(",%lld", currentDrift_us);
-
-            // now the derived values
-            // printf(",%f,%ld,%lu,%lu",
-            //         static_cast<double>(referenceClockFrequency * periodsPerMeasurement) / oscCount,
-            //         lastEnvironmentSample->getTemperatureDegree(),
-            //         lastEnvironmentSample->getPressurePa(),
-            //         lastEnvironmentSample->getHumidityPercentRH()
-            // );
-
-            printf("\n");
-            currentLine++;
-            // TODO: Make wrapping class that does the logging prints -----
-
+            // ----- emit measurements to log -----
+            logger.addDataPoint(oscCount,
+                                currentEstimatedElapsedTime,
+                                timeEstimator.getEstimatedForkTemperature(),
+                                currentDrift_us,
+                                *lastEnvironmentSample);
+            // ------------------------------------
         }
     }
 
     return 0;
 }
 
-void osc_callback(uint gpio, uint32_t events)
+void fork_osc_callback(uint gpio, uint32_t events)
 {
+    // Hot cycle:
+    // The more repeatable this counts, the better phase variance gets
     static size_t currentCycle = 0;
-    if (currentCycle >= periodsPerMeasurement)
+    if (currentCycle >= config::periodsPerMeasurement)
     {
         const OscCount now = time_us_32();
         const OscCount diff = now - oscCount;
         oscCount = now;
         currentCycle = 0;
-        if (!queue_try_add(&period_fifo, &diff)) {
+        if (!queue_try_add(&period_fifo, &diff))
+        {
+            // this happens if we can't consume the counts
+            // in the main estimate & display loop
+            // Should not happen. Especially not regularly.
             printf("FIFO was full\n");
         };
     }
@@ -290,7 +214,10 @@ void osc_callback(uint gpio, uint32_t events)
     }
 }
 
-bool timer_callback(__unused repeating_timer_t *rt) {
+bool
+env_sample_callback(__unused repeating_timer_t *rt)
+{
+    // as simple as it gets. Is not realtime-critical.
     shouldSampleEnvironment = true;
     return true; // keep repeating
 }

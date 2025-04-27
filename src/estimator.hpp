@@ -108,10 +108,20 @@ public:
      * @return Time in microseconds
      */
     constexpr
-    auto
+    uint64_t
     getEstimatedElapsedTime() const
     {
         return mEstimatedElapsedTime_us;
+    }
+
+    /**
+     * Used for logging purposes
+     */
+    constexpr
+    auto
+    getEstimatedForkTemperature() const
+    {
+        return mDamper.getEstimate();
     }
 
 private:

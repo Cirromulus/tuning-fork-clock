@@ -12,6 +12,8 @@
 // Benefit is that it only takes one register read.
 using OscCount = uint32_t;
 
+namespace config
+{
 // should be big enough for allowing I2C measuring traffic
 static constexpr size_t fifoSize = 16;
 
@@ -61,3 +63,5 @@ static constexpr std::array tempRateCalibrationPolynom {
 // This is not calibrated against an actual time difference,
 // but instead was "trained" on the average sample time.
 static constexpr double dampFactor {0.002279174504551375};
+
+} // namespace config

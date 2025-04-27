@@ -7,9 +7,8 @@
 #include <array>
 #include <optional>
 
-
-// FIXME DEBUg
-#include <cstdio>
+// // FIXME DEBUg
+// #include <cstdio>
 
 
 using namespace copied_from_adafruit;
@@ -146,7 +145,7 @@ private:
         }
 
         {
-            config conf;
+            copied_from_adafruit::config conf;
             conf.filter = FILTER_X2;
             conf.t_sb = STANDBY_MS_1000;
             conf.spi3w_en = 0;
@@ -362,27 +361,3 @@ private:
     bme280_calib_data m_calibration;
     int32_t m_tempFineCoefficient;  // updates with every temperature read
 };
-
-void bmeTest(BME280& bme)
-{
-    while (!bme.init())
-    {
-        printf("Could not init BME280.\n");
-        sleep_ms(1000);
-    }
-
-
-    while(true)
-    {
-        const auto maybeTemperature = bme.readTemperature();
-        if (maybeTemperature)
-        {
-            printf("Temp: %lu * 0.01 Celsius\n", *maybeTemperature);
-        }
-        else
-        {
-            printf("No worky-work\n");
-        }
-        sleep_ms(1000);
-    }
-}
