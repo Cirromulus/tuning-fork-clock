@@ -29,7 +29,7 @@ public:
     {
     }
 
-    void addDataPoint(const OscCount& period_us,
+    void addDataPoint(const OscCount& period_counts,    // unit is "reference counts"
                       const uint64_t& estimatedTime_us,
                       const double& estimatedForkTemp_deg,
                       const int64_t& estimatedDrift_us,
@@ -38,7 +38,7 @@ public:
         // I would like to make that more generic. Enum -> Type & member translation with templates?
         if (mConfig.period)
         {
-            printf("%lu", period_us);
+            printf("%lu", period_counts);
         }
         if (mConfig.bmeData)
         {
@@ -54,9 +54,9 @@ public:
         }
         if (mConfig.humanReadables)
         {
-            static constexpr double expectedCyclesPerSecond = config::referenceClockFrequency * config::periodsPerMeasurement;
+            static constexpr double referenceCountsPerSecond = config::referenceClockFrequency * config::periodsPerMeasurement;
             printf(",%f,%ld,%lu,%lu",
-                    static_cast<double>(expectedCyclesPerSecond / period_us),
+                    static_cast<double>(referenceCountsPerSecond / period_counts),
                     bmeData.getTemperatureDegree(),
                     bmeData.getPressurePa(),
                     bmeData.getHumidityPercentRH());
