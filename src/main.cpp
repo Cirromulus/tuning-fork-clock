@@ -44,9 +44,9 @@ static volatile bool shouldSampleEnvironment = false;
 repeating_timer_t environment_sample_timer;
 
 
-
 int
-main() {
+main()
+{
     setup_default_uart();
     stdio_init_all();
 
@@ -68,15 +68,14 @@ main() {
     while (!bme.init())
     {
         printf("Could not init BME280.\n");
-        display.showError("BME Err");
-        sleep_ms(1000);
+        display.showError("Could not init BME280");
     }
 
     // negative timeout means exact delay (rather than delay between callbacks)
     if (!add_repeating_timer_ms(-2000, env_sample_callback, NULL, &environment_sample_timer))
     {
         printf("Failed to add enviroment sampling timer\n");
-        display.showError("Tim Err");
+        display.showError("Failed to add enviroment sampling timer");
     }
 
 
@@ -144,11 +143,13 @@ main() {
         // Handling sanity of measured values
         if (oscCount > config::expectedMaxCount)
         {
+            display.showError("fTooLow");
             status.tooLowFrequency();
             continue;
         }
         if (oscCount < config::expectedMinCount)
         {
+            display.showError("fTooHigh");
             status.tooHighFrequency();
             continue;
         }
@@ -156,7 +157,7 @@ main() {
         {
             // we never had a valid reading
             status.invalidTempReading();
-            display.showError("Err!Temp");
+            display.showError("Err: Temp was never read");
             continue;
         }
 

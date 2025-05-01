@@ -14,12 +14,14 @@ using OscCount = uint32_t;
 
 namespace config
 {
-// should be big enough for allowing I2C measuring traffic
+// should be big enough for allowing I2C measuring traffic.
+// This is translatable via `fifoSize * periodsPerMeasurement / expectedOscFreq`
+// = number of seconds until fifo is full
 static constexpr size_t fifoSize = 16;
 
 
 static constexpr double expectedOscFreq = 440;
-static constexpr double expectedDeviation = expectedOscFreq * .1;
+static constexpr double expectedDeviation = expectedOscFreq * .10;
 
 static constexpr size_t periodsPerMeasurement = expectedOscFreq;
 

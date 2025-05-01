@@ -27,15 +27,14 @@ public:
     void
     showError(std::string_view const& str)
     {
-        // TODO: Running text etc
-        mDriver.write_string_oneshot(str, {.blink = true});
+        mDriver.write_string_running(str, {.blink = true});
     }
 
     void
     showInfo(std::string_view const& str)
     {
         // TODO: Running text etc
-        mDriver.write_string_oneshot(str);
+        mDriver.write_string_running(str);
     }
 
     constexpr

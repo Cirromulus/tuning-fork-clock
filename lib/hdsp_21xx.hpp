@@ -76,6 +76,15 @@ namespace hdsp21xx
     bool blink = false;
     Alignment alignment = Alignment::left;
   };
+
+  struct RunningTextOptions
+  {
+    uint32_t per_char_wait_us = 750'000 / 8;
+    uint32_t initial_wait_us = 750'000;
+    std::optional<uint32_t> end_wait_us = std::nullopt; // this means "stay on"!
+    bool blink = false;
+    uint32_t cycles = 1;
+  };
 }
 
 // This was downgraded to only work for one single display.
@@ -89,6 +98,7 @@ class HDSP21XX
 
 public:
   using StringOptions = hdsp21xx::StringOptions;
+  using RunningTextOptions = hdsp21xx::RunningTextOptions;
   using Brightness = uint8_t;
   static constexpr Brightness maxBrightness = 7;
   static constexpr size_t num_characters = 8;
@@ -162,10 +172,39 @@ public:
     }
   }
 
+  /**
+   * Blocking!!!!1!1!
+   */
   void
-  write_string_running(const std::string_view& str, size_t us_per_wrapped_char)
+  write_string_running(const std::string_view& str, const RunningTextOptions& options = RunningTextOptions{})
   {
-    // TODO
+    for (size_t cycle = 0; cycle < options.cycles; cycle++)
+    {
+      write_string_oneshot(str, {.blink = options.blink});
+      if (str.size() <= num_characters)
+      {
+        // why even bother?
+        return;
+      }
+      sleep_us(options.initial_wait_us);
+      for (size_t pointer = 1; pointer + num_characters < str.size(); pointer++)
+      {
+        write_string_oneshot(str.substr(pointer, num_characters));  // blink is not good during move
+        sleep_us(options.per_char_wait_us);
+      }
+      if (options.blink)
+      {
+        for (size_t i = 0; i < num_characters; i++)
+        {
+          blink_char(i, true);
+        }
+      }
+      if (options.end_wait_us)
+      {
+        sleep_us(*options.end_wait_us);
+        clear_screen();
+      }
+    }
   }
 
   // set display brightness 0..7. Also enables character blinking.
