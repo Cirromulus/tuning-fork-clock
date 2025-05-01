@@ -71,7 +71,6 @@ public:
     }
 
 private:
-    // ??
     std::optional<TimeType> mAbsoluteTime_us{std::nullopt};
     TimeType mTimeDelta_us{0};
 

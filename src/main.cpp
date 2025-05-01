@@ -31,7 +31,7 @@ void
 fork_osc_callback(uint gpio, uint32_t events);
 
 // this will be fed by external reference or internal Pico-OSC
-uint64_t
+OscCount
 getCurrentReferenceTicks();
 
 // --------------
@@ -53,7 +53,9 @@ main()
 
     WS2812LED led{onboardLedNr};
     Status status{led, 0x03};
+    status.noSignal();  // default led color
 
+    // only used for display.
     Mcp23017 expander{setupMcpI2c(), displayPortexpanderAddr};
     // mcpTest(expander);
     // minimalHDSPTest(expander);
@@ -89,14 +91,18 @@ main()
 
     static constexpr size_t printHeaderEveryNLines = 60 * (config::periodsPerMeasurement / config::expectedOscFreq);
 
-    auto lastEnvironmentSample = bme.readEnvironment();
-    auto lastValidOscSampleTime = get_absolute_time();
+    // Used for temperature sensing
+    std::optional<BME280::EnvironmentMeasurement> lastEnvironmentSample = bme.readEnvironment();
+    // Used for detection of "no fork signal"
+    absolute_time_t lastValidForkSampleTime = get_absolute_time();
 
     Estimator timeEstimator{
         PolynomCalc{config::temperatureCalibrationPolynom},
         PolynomCalc{config::tempRateCalibrationPolynom},
         Damper{config::dampFactor}
     };
+
+    display.showInfo("Init done");
 
     // main bigloop: get samples, estimate, print.
     while(true)
@@ -106,7 +112,7 @@ main()
         if (!queue_try_remove(&period_fifo, &oscCount))
         {
             // There is no new oscCount to get
-            const auto diff = absolute_time_diff_us(lastValidOscSampleTime, get_absolute_time());
+            const auto diff = absolute_time_diff_us(lastValidForkSampleTime, get_absolute_time());
             if (diff > config::expectedMaxCount)
             {
                 display.showError("NoSignal");
@@ -119,7 +125,7 @@ main()
         else
         {
             // We got a sample
-            lastValidOscSampleTime = get_absolute_time();
+            lastValidForkSampleTime = get_absolute_time();
         }
 
         // Set status "default", will be overwritten later if something errorred
@@ -198,7 +204,7 @@ void fork_osc_callback(uint gpio, uint32_t events)
     static size_t currentCycle = 0;
     if (currentCycle >= config::periodsPerMeasurement)
     {
-        const OscCount now = time_us_32();
+        const OscCount now = getCurrentReferenceTicks();
         const OscCount diff = now - oscCount;
         oscCount = now;
         currentCycle = 0;
@@ -217,10 +223,17 @@ void fork_osc_callback(uint gpio, uint32_t events)
 }
 
 bool
-env_sample_callback(__unused repeating_timer_t *rt)
+env_sample_callback(repeating_timer_t*)
 {
     // as simple as it gets. Is not realtime-critical.
     shouldSampleEnvironment = true;
     return true; // keep repeating
 }
 
+OscCount
+getCurrentReferenceTicks()
+{
+    // Currently, only internal clack is a reference.
+    // TODO: Make PIO counter for external reference
+    return time_us_64();
+}
