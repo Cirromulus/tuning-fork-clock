@@ -7,6 +7,7 @@
 #include "ddf.hpp"
 #include "display.hpp"
 #include "csvlogger.hpp"
+#include "absolute_time.hpp"
 // #include "tests.hpp"
 
 #include <pico/stdlib.h>
