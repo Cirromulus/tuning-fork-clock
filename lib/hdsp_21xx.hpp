@@ -187,9 +187,28 @@ public:
     {
       if (options.fade_in)
       {
-        for (size_t pointer = 0; pointer < num_characters; pointer++)
+        size_t pointer = 0;
+        // coming in
+        for (; pointer < str.size(); pointer++)
         {
           write_string_oneshot(str.substr(0, pointer), {.alignment = StringOptions::Alignment::right});  // blink is not good during move
+          sleep_us(options.per_char_wait_us);
+        }
+        // if str is smaller than display, fade to leftalignment
+        for (;pointer <= num_characters; pointer++)
+        {
+          const size_t leftpad = num_characters - pointer;
+          // uff, transition from right alignment to left if string smaller than num_chars
+          // const bool leftpad = pointer - str.size();
+          for (size_t i = 0; i < num_characters; i++)
+          {
+            if (i < leftpad)
+              write_builtin_char(i, ' '); // starting
+            else if (i < leftpad + str.size())
+              write_builtin_char(i, str[i - leftpad]); // actual text
+            else
+              write_builtin_char(i, ' '); // trailing
+          }
           sleep_us(options.per_char_wait_us);
         }
       }
