@@ -8,6 +8,7 @@
 #include "display.hpp"
 #include "csvlogger.hpp"
 #include "absolute_time.hpp"
+#include "command.hpp"
 // #include "tests.hpp"
 
 #include <pico/stdlib.h>
@@ -34,10 +35,10 @@ fork_osc_callback(uint gpio, uint32_t events);
 OscCount
 getCurrentReferenceTicks();
 
+// TODO: Add thread that
 // watches serial input for set-time commands.
 // Might also do the display sometime, perhaps.
-void
-setTime_thread();
+
 
 // --------------
 
@@ -72,6 +73,8 @@ main()
     // bmeTest(bme);
 
     CSVLogger logger{};   // with default config
+    AbsoluteTimeManager time{};
+    CommandParser commandParser{time, display};
 
     while (!bme.init())
     {
@@ -123,8 +126,15 @@ main()
                 display.showError("NoSignal");
                 status.noSignal();
             }
+            // --------------------------------------------------------------
             // No new updates, but now and here would be time to do something
             // TODO: make this more understandable
+            const auto maybeChar = getchar_timeout_us(1);
+            if (maybeChar != PICO_ERROR_TIMEOUT)
+            {
+                commandParser.consumeCharacter(static_cast<char>(maybeChar));
+            }
+            // --------------------------------------------------------------
             continue;
         }
         else

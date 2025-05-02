@@ -1,4 +1,4 @@
-#/usr/bin/python3
+#!/usr/bin/python3
 
 import serial
 from datetime import datetime, timezone
@@ -29,10 +29,10 @@ assert(device.is_open)
 
 while True:
     s = getTimeString()
-    print(s)
-    device.write(s.encode('ascii'))
+    print("-> ", s)
+    device.write((s + '\n').encode('ascii'))
     ret = device.readline().decode('ascii')
     if ret:
-        print (ret)
+        print ("<- ", ret)
         if ret == 'OK':
             break
