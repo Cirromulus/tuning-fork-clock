@@ -10,6 +10,8 @@
 #include <expected>
 #include <functional>
 #include <cctype>
+#include <time.h>
+#include <stdlib.h>
 
 class TimeParser
 {
@@ -139,13 +141,65 @@ private:
 
 // ----------------------------------------------------------
 
+class TimeZoneParser
+{
+public:
+    struct StringWithLength
+    {
+        const char* str;
+        size_t size;
+    };
+
+    constexpr
+    bool
+    consumeCharacter(char c)
+    {
+        mStringBuffer[mPointer] = c;
+        mPointer++;
+        if (mPointer >= mStringBuffer.size() - 1) // for zero delimiter
+        {
+            return false;
+        }
+        return true;
+    }
+
+    constexpr
+    void
+    reset()
+    {
+        mPointer = 0;
+    }
+
+    constexpr
+    StringWithLength
+    get()
+    {
+        // Currently no validation, because I don't know the complete list
+        mStringBuffer[mPointer] = 0;
+        return {mStringBuffer.data(), mPointer};
+    }
+
+private:
+    size_t mPointer{0};
+    std::array<char, 11+1> mStringBuffer;
+};
+
+// ----------------------------------------------------------
+
 class CommandParser
 {
+    enum class ParseState
+    {
+        timestamp,
+        timezone
+    };
+
 public:
     constexpr
     CommandParser(AbsoluteTimeManager& timeManagerReference,
                   std::optional<std::reference_wrapper<ClockDisplay>> maybeDisplayReference = std::nullopt)
-                  : timeManager{timeManagerReference}, maybeDisplay{maybeDisplayReference}
+                  : timeManager{timeManagerReference},
+                    maybeDisplay{maybeDisplayReference}
     {
     }
 
@@ -156,10 +210,24 @@ public:
         // currently, there is only one command,
         // so there is no need for a header.
         // But here it would be checked with a switch and state.
+        if (chr == ' ')
+        {
+            // transition from timestamp
+            mState = ParseState::timezone;
+            return;
+        }
 
         if (chr == '\n')
         {
             // see that as an "apply"
+            const auto [timezone_identifier, len] = mTzParser.get();
+            if (len > 0)
+            {
+                printf("Setting timezone '%s', ", timezone_identifier);
+                setenv("TZ", timezone_identifier, 1);
+                // I currently don't know a way to check for success / correct timezone
+                tzset();
+            }
             const auto maybeParsedTime_ms = mTimeParser.parseBuffer();
             if (maybeParsedTime_ms)
             {
@@ -177,6 +245,7 @@ public:
                         maybeParsedTime_ms.error().size(),
                         maybeParsedTime_ms.error().data());
             }
+            reset();
             return;
         }
 
@@ -187,18 +256,38 @@ public:
             // ignore unprintables and \r for now
             return;
         }
-
-        if (const auto maybeFailReason = mTimeParser.consume_character_ms(chr))
+        switch (mState)
         {
-            printf("Could not consume time character: %.*s\n",
-                    maybeFailReason->size(),
-                    maybeFailReason->data());
+        case ParseState::timestamp:
+            if (const auto maybeFailReason = mTimeParser.consume_character_ms(chr))
+            {
+                printf("Could not consume time character: %.*s\n",
+                        maybeFailReason->size(),
+                        maybeFailReason->data());
+                reset();
+            }
+            break;
+        case ParseState::timezone:
+            if (!mTzParser.consumeCharacter(chr))
+            {
+                printf("Could not consume timezone character (too many?)\n");
+            }
         }
-
     }
 
 private:
+    void
+    reset()
+    {
+        mState = ParseState::timestamp;
+        mTimeParser.reset();
+        mTzParser.reset();
+    }
+
+    ParseState mState;
+
     std::optional<std::reference_wrapper<ClockDisplay>> maybeDisplay;
     AbsoluteTimeManager& timeManager;
     TimeParser mTimeParser;
+    TimeZoneParser mTzParser;
 };

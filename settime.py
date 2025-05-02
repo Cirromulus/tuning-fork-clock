@@ -6,19 +6,20 @@ from time import sleep
 
 def getTimeString():
     local_timezone = datetime.now(timezone.utc).astimezone()
-    ## Decided to not handle the timezone separately.
-    ## the worst that will happen is that leap-seconds and DST are applied at the wrong time,
-    ## which is OK for me.
-    # local_timezone_offs_seconds = local_timezone.utcoffset().seconds
-
-    # Currently ignoring the information when and how much DST to add.
-    # Problem for later.
-
-    # will fit well into uint64, and microseconds with an ugly ascii protocol is a joke
+    # ms will fit well into uint64, and microseconds with an ugly ascii protocol is a joke
     timestamp_ms = round(local_timezone.timestamp()*1000)
     return f"{timestamp_ms}"
 
+def getTzString():
+    # TODO: Generate that string from host locale
+    """
+    So for CET-1CEST
 
+    The standard timezone is CET (Central European Time)
+    The offset from UTC is -1
+    The DST timezone is CEST (Central European Summer Time)
+    """
+    return "CET-1CEST"
 
 # TODO: Make parameter
 devicePath = '/dev/ttyACM0'
@@ -28,9 +29,10 @@ device = serial.Serial(devicePath, timeout=1)  # don't care for baudrate, is USB
 assert(device.is_open)
 
 while True:
-    s = getTimeString()
-    print("--> ", s)
-    device.write((s + '\n').encode('ascii'))
+    command = getTimeString() + ' ' + getTzString()
+    print("--> ", command)
+
+    device.write((command + '\n').encode('ascii'))
     ret = device.readline().decode('ascii').strip()
     if ret:
         print ("<-- ", ret)

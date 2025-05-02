@@ -5,11 +5,13 @@
 
 #include <string_view>
 #include <charconv>
+#include <ctime>
 
 class ClockDisplay
 {
     enum class DisplayState
     {
+        absoluteTime_stamp,
         absoluteTime_time,
         absoluteTime_calendar,
         elapsedTimeSinceBoot,
@@ -69,11 +71,9 @@ public:
         // Will probably be added once it gets more fancy.
         switch (getNextTransition())
         {
-            case DisplayState::absoluteTime_time:
-            case DisplayState::absoluteTime_calendar:
+            case DisplayState::absoluteTime_stamp:
             {
-                // Currently not implemented to end.
-                // Only displays unix timestamp as seconds, skipping the most significant digits to fit to screen.
+                // displays unix timestamp as seconds, skipping the most significant digits to fit to screen.
                 const unsigned eightDigits = 100'000'000;
                 const unsigned partThatIsTooMuch = *mAbsoluteTime_s / eightDigits; // eight digits
                 const unsigned timeToDisplay = *mAbsoluteTime_s - (partThatIsTooMuch * eightDigits);
@@ -84,8 +84,40 @@ public:
                 }
                 else
                 {
-                    showError("aT_t str");
+                    showError("aT_s str");
                 }
+            }
+            break;
+            case DisplayState::absoluteTime_time:
+            {
+                const time_t now_stamp = *mAbsoluteTime_s;
+                const std::tm* now = std::localtime(&now_stamp);
+                // TODO: make separate function, how ugly is that
+                size_t c = 0;
+                mDriver.write_builtin_char(c++, (now->tm_hour / 10) + '0');
+                mDriver.write_builtin_char(c++, (now->tm_hour % 10) + '0');
+                mDriver.write_builtin_char(c++, ':', true);
+                mDriver.write_builtin_char(c++, (now->tm_min / 10) + '0');
+                mDriver.write_builtin_char(c++, (now->tm_min % 10) + '0');
+                mDriver.write_builtin_char(c++, ':', true);
+                mDriver.write_builtin_char(c++, (now->tm_sec / 10) + '0');
+                mDriver.write_builtin_char(c++, (now->tm_sec % 10) + '0');
+            }
+            break;
+            case DisplayState::absoluteTime_calendar:
+            {
+                const time_t now_stamp = *mAbsoluteTime_s;
+                const std::tm* now = std::localtime(&now_stamp);
+                // TODO: make separate function, how ugly is that
+                size_t c = 0;
+                mDriver.write_builtin_char(c++, (now->tm_mday / 10) + '0');
+                mDriver.write_builtin_char(c++, (now->tm_mday % 10) + '0');
+                mDriver.write_builtin_char(c++, '.');
+                mDriver.write_builtin_char(c++, (now->tm_mon / 10) + '0');
+                mDriver.write_builtin_char(c++, (now->tm_mon % 10) + '0');
+                mDriver.write_builtin_char(c++, '.');
+                mDriver.write_builtin_char(c++, ((now->tm_year / 10) % 10) + '0');
+                mDriver.write_builtin_char(c++, (now->tm_year % 10) + '0');
             }
             break;
             case DisplayState::elapsedTimeSinceBoot:
@@ -143,7 +175,10 @@ private:
         }
         else if (mAbsoluteTime_s)
         {
-            return DisplayState::absoluteTime_time;
+            if (mElapsedSinceBoot_s % 10 < 8)
+                return DisplayState::absoluteTime_time; // [2, 7]
+            else
+                return DisplayState::absoluteTime_calendar; // [8, 9]
         }
         else
         {
