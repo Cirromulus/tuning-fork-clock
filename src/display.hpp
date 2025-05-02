@@ -29,7 +29,7 @@ public:
     void
     showError(std::string_view const& str)
     {
-        mDriver.write_string_running(str, {.blink = true});
+        mDriver.write_string_running(str, {.end_wait_us = 500'000, .blink = true});
     }
 
     void
