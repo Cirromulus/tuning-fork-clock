@@ -18,42 +18,38 @@ public:
     {
         // This resets current delta to count from last abs update
         mAbsoluteTime_us = abs_ms * 1'000;
-        mTimeDelta_us = 0;
+        mElapsedTimeSinceAbsolute_us = 0;
     }
 
     constexpr
     void
     increaseDelta_us(const TimeType& delta)
     {
-        mTimeDelta_us += delta;
+        mElapsedTimeSinceAbsolute_us += delta;
+        mElapsedTimeSinceBoot_us += delta;
     }
 
-    // constexpr
-    std::optional<std::string_view>
-    getDayMonthYear()
+    constexpr
+    std::optional<TimeType>
+    getAbsoluteTime_us() const
     {
-        // todo
-        return std::nullopt;
-    }
-
-    std::optional<std::string_view>
-    getTime()
-    {
-        // todo
+        if (mAbsoluteTime_us)
+        {
+            return *mAbsoluteTime_us + mElapsedTimeSinceAbsolute_us;
+        }
         return std::nullopt;
     }
 
     // will be used when we don't have an absolute time set
     constexpr
     const TimeType&
-    getTimeDelta() const
+    getElapsedTimeSinceBoot_us() const
     {
-        return mTimeDelta_us;
+        return mElapsedTimeSinceBoot_us;
     }
 
 private:
     std::optional<TimeType> mAbsoluteTime_us{std::nullopt};
-    TimeType mTimeDelta_us{0};
-
-    std::array<char, 8> mStringBuffer;
+    TimeType mElapsedTimeSinceBoot_us{0};
+    TimeType mElapsedTimeSinceAbsolute_us{0};
 };

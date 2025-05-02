@@ -10,7 +10,9 @@ class ClockDisplay
 {
     enum class DisplayState
     {
-        elapsedTime,
+        absoluteTime_time,
+        absoluteTime_calendar,
+        elapsedTimeSinceBoot,
         drift
     };
 
@@ -39,16 +41,24 @@ public:
 
     constexpr
     void
-    setCurrentElapsedTime_us(uint64_t const& elapsedTime_us)
+    setElapsedTimeSinceBoot_us(uint64_t const& elapsedTime_us)
     {
-        mCurrentElapsedTime_s = elapsedTime_us / 1'000'000;
+        mElapsedSinceBoot_s = elapsedTime_us / 1'000'000;
     }
 
     constexpr
     void
-    setCurrentDrift_us(uint64_t const& drift_us)
+    setAbsoluteTime_us(const uint64_t& absoluteTime_us)
     {
-        mCurrentDrift_ms = drift_us / 1'000;
+        mAbsoluteTime_s = absoluteTime_us / 1'000'000;
+    }
+
+    // optional input so that we can disable in in runtime if reference disconnects
+    constexpr
+    void
+    setCurrentDrift_us(const std::optional<uint64_t>& maybeDrift_us)
+    {
+        mDrift_ms = maybeDrift_us.transform([](const auto drift_us){return drift_us / 1'000;});
     }
 
     void
@@ -59,9 +69,28 @@ public:
         // Will probably be added once it gets more fancy.
         switch (getNextTransition())
         {
-            case DisplayState::elapsedTime:
+            case DisplayState::absoluteTime_time:
+            case DisplayState::absoluteTime_calendar:
             {
-                const auto [end, code] = std::to_chars(mBuffer.begin(), mBuffer.end(), mCurrentElapsedTime_s);
+                // Currently not implemented to end.
+                // Only displays unix timestamp as seconds, skipping the most significant digits to fit to screen.
+                const unsigned eightDigits = 100'000'000;
+                const unsigned partThatIsTooMuch = *mAbsoluteTime_s / eightDigits; // eight digits
+                const unsigned timeToDisplay = *mAbsoluteTime_s - (partThatIsTooMuch * eightDigits);
+                const auto [end, code] = std::to_chars(mBuffer.begin(), mBuffer.end(), timeToDisplay);
+                if (code == std::errc())    // this is considered a success. meh.
+                {
+                    mDriver.write_string_oneshot(std::string_view{mBuffer.begin(), end}, {.alignment = StringOptions::Alignment::right});
+                }
+                else
+                {
+                    showError("aT_t str");
+                }
+            }
+            break;
+            case DisplayState::elapsedTimeSinceBoot:
+            {
+                const auto [end, code] = std::to_chars(mBuffer.begin(), mBuffer.end(), mElapsedSinceBoot_s);
                 if (code == std::errc())    // this is considered a success. meh.
                 {
                     mDriver.write_string_oneshot(std::string_view{mBuffer.begin(), end}, {.alignment = StringOptions::Alignment::right});
@@ -75,7 +104,8 @@ public:
             case DisplayState::drift:
             {
                 // Display as a float with ms precision
-                const auto [end, code] = std::to_chars(mBuffer.begin(), mBuffer.end(), mCurrentDrift_ms / 1'000.);
+                // check for mDrift_ms.has_value() should be done in transition...
+                const auto [end, code] = std::to_chars(mBuffer.begin(), mBuffer.end(), *mDrift_ms / 1'000.);
                 if (code == std::errc())    // this is considered a success. meh.
                 {
                     const std::string_view numberstr{mBuffer.begin(), end};
@@ -106,21 +136,25 @@ private:
     getNextTransition() const
     {
         // Currently no fancy state machine.
-        if (mCurrentElapsedTime_s % 10 < 2)
+        if (mDrift_ms.has_value() && (mElapsedSinceBoot_s % 10 < 2))
         {
             // two seconds of drift from [0, 1]
             return DisplayState::drift;
         }
+        else if (mAbsoluteTime_s)
+        {
+            return DisplayState::absoluteTime_time;
+        }
         else
         {
-            // Display elapsed time between [2, 9]
-            return DisplayState::elapsedTime;
+            return DisplayState::elapsedTimeSinceBoot;
         }
     }
 
     // Todo: Beauty
-    uint64_t mCurrentDrift_ms {0};
-    uint32_t mCurrentElapsedTime_s {0};
+    std::optional<uint64_t> mDrift_ms {std::nullopt};
+    std::optional<uint32_t> mAbsoluteTime_s {std::nullopt};
+    uint32_t mElapsedSinceBoot_s{0};
 
     std::array<char, HDSP21XX::num_characters> mBuffer;
 

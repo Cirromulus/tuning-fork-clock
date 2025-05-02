@@ -80,15 +80,18 @@ public:
     Estimator(const PeriodEstimatorType& pe,
               const ErrorEstimatorType& ee,
               const DamperType& da) :
-        mEstimatedElapsedTime_us{0},
         mPeriodEstimator{pe},
         mErrorEstimator{ee},
         mDamper{da}
     {}
 
+    /**
+     * @return Delta Time in microseconds
+     */
+
     template <typename MeasurementType>
     constexpr
-    void
+    uint64_t
     consumeNextMeasurement(const MeasurementType& temperatureMeasurement)
     {
         mDamper.consumeNextCycle(temperatureMeasurement);
@@ -101,17 +104,7 @@ public:
 
         const double estimatedCorrectedPeriod_us = estimatedPeriod_us + estimatedErrorCorrection_us;
 
-        mEstimatedElapsedTime_us += llround(estimatedCorrectedPeriod_us);
-    }
-
-    /**
-     * @return Time in microseconds
-     */
-    constexpr
-    uint64_t
-    getEstimatedElapsedTime() const
-    {
-        return mEstimatedElapsedTime_us;
+        return llround(estimatedCorrectedPeriod_us);
     }
 
     /**
@@ -125,8 +118,6 @@ public:
     }
 
 private:
-    uint64_t mEstimatedElapsedTime_us;
-
     PeriodEstimatorType mPeriodEstimator;
     ErrorEstimatorType mErrorEstimator;
     Damper mDamper;

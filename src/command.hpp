@@ -53,7 +53,6 @@ class TimeParser
                 return std::unexpected("Integer overflow: Mult");
             }
 
-            result *= 10;
             const auto maybeNextNumber = convertCharacterToNumber(c);
             if (!maybeNextNumber.has_value())
             {
@@ -63,14 +62,15 @@ class TimeParser
             // additon overflow check here
             // Checks if the remaining space in the <TimeType> range is bigger than the number to add.
             // This makes sure that the new result fits into the <TimeType> range.
-            const auto& nextNumber = maybeNextNumber.value();
+            const uint8_t& currentDigit = maybeNextNumber.value();
 
-            if ((std::numeric_limits<TimeType>::max() - result) < nextNumber)
+            if ((std::numeric_limits<TimeType>::max() - result) < currentDigit)
             {
                 return std::unexpected("Integer overflow: Add");
             }
 
-            result += nextNumber;
+            result *= 10;
+            result += currentDigit;
         }
 
         return result;
@@ -135,6 +135,9 @@ private:
     std::array<char, max_uint64_digits + 1> mParseBuffer;
 };
 
+// static_assert(*TimeParser::convertCharacterToNumber('3') == 3);
+
+// ----------------------------------------------------------
 
 class CommandParser
 {
@@ -161,7 +164,7 @@ public:
             if (maybeParsedTime_ms)
             {
                 // OK is the magic ACK value
-                printf("Applying timestamp %d: OK\n", *maybeParsedTime_ms);
+                printf("Applying timestamp %llu: OK\n", *maybeParsedTime_ms);
                 if (maybeDisplay)
                 {
                     maybeDisplay->get().showInfo("Set Time");

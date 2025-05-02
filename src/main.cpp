@@ -188,20 +188,24 @@ main()
             // Now: Estimate! and print.
 
             // ------ The Interesting Thing ------
-            timeEstimator.consumeNextMeasurement(lastEnvironmentSample->temperature_centidegree);
-            const auto currentEstimatedElapsedTime = timeEstimator.getEstimatedElapsedTime();
-            const auto currentDrift_us = (time_us_64() - currentEstimatedElapsedTime);
+            const auto delta = timeEstimator.consumeNextMeasurement(lastEnvironmentSample->temperature_centidegree);
+            time.increaseDelta_us(delta);
             // -----------------------------------
 
             // --- print current time to screen ---
-            display.setCurrentElapsedTime_us(currentEstimatedElapsedTime);
+            display.setElapsedTimeSinceBoot_us(time.getElapsedTimeSinceBoot_us());
+            const auto currentDrift_us = (time_us_64() - time.getElapsedTimeSinceBoot_us());
             display.setCurrentDrift_us(currentDrift_us);
+            if (const auto maybeAbsoluteTime_us = time.getAbsoluteTime_us())
+            {
+                display.setAbsoluteTime_us(*maybeAbsoluteTime_us);
+            }
             display.update();
             // ------------------------------------
 
             // ----- emit measurements to log -----
             logger.addDataPoint(oscCount,
-                                currentEstimatedElapsedTime,
+                                time.getElapsedTimeSinceBoot_us(),
                                 timeEstimator.getEstimatedForkTemperature(),
                                 currentDrift_us,
                                 *lastEnvironmentSample);
