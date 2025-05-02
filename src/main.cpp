@@ -66,7 +66,7 @@ main()
     // mcpTest(expander);
     // minimalHDSPTest(expander);
     ClockDisplay display{expander, displayPinSetup};
-    display.showInfo("Startup");
+    display.showInfo("Startup", {.fade_in = true, .fade_out = true});
 
     BME280 bme{setupTempI2c()};
     // this will block forever

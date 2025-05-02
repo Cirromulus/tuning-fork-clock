@@ -33,10 +33,10 @@ public:
     }
 
     void
-    showInfo(std::string_view const& str)
+    showInfo(std::string_view const& str, const HDSP21XX::RunningTextOptions& options = {})
     {
         // TODO: Running text etc
-        mDriver.write_string_running(str);
+        mDriver.write_string_running(str, options);
     }
 
     constexpr

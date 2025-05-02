@@ -86,6 +86,8 @@ namespace hdsp21xx
     bool blink = false;
     bool clear_screen = false;
     uint32_t cycles = 1;
+    bool fade_in = false;   // if active, initial_wait_us is ignored
+    bool fade_out = false;  // if active, end_wait_us is ignored
   };
 }
 
@@ -155,7 +157,7 @@ public:
   }
 
   void
-  write_string_oneshot(const std::string_view& str, const StringOptions& options = StringOptions{})
+  write_string_oneshot(const std::string_view& str, const StringOptions& options = {})
   {
     const std::string_view sanitizedStr = str.substr(0, num_characters);
     const size_t startOfString = options.alignment == StringOptions::Alignment::left ? 0 : num_characters - sanitizedStr.size();
@@ -178,35 +180,62 @@ public:
    * Blocking!!!!1!1!
    */
   void
-  write_string_running(const std::string_view& str, const RunningTextOptions& options = RunningTextOptions{})
+  write_string_running(const std::string_view& str, const RunningTextOptions& options = {})
   {
+    // todo: Add possibility to not override blink in write_string_oneshot so that we can blink the complete text here
     for (size_t cycle = 0; cycle < options.cycles; cycle++)
     {
-      write_string_oneshot(str, {.blink = options.blink});
-      if (str.size() <= num_characters)
+      if (options.fade_in)
       {
-        // why even bother?
-        return;
-      }
-      sleep_us(options.initial_wait_us);
-      for (size_t pointer = 1; pointer + num_characters < str.size(); pointer++)
-      {
-        write_string_oneshot(str.substr(pointer, num_characters));  // blink is not good during move
-        sleep_us(options.per_char_wait_us);
-      }
-      if (options.blink)
-      {
-        for (size_t i = 0; i < num_characters; i++)
+        for (size_t pointer = 0; pointer < num_characters; pointer++)
         {
-          blink_char(i, true);
+          write_string_oneshot(str.substr(0, pointer), {.alignment = StringOptions::Alignment::right});  // blink is not good during move
+          sleep_us(options.per_char_wait_us);
         }
       }
-
-      sleep_us(options.end_wait_us);
-
-      if (options.clear_screen)
+      else
       {
-        clear_screen();
+        write_string_oneshot(str, {.blink = options.blink});
+        if (str.size() <= num_characters)
+        {
+          // why even bother?
+          return;
+        }
+        sleep_us(options.initial_wait_us);
+      }
+
+      size_t pointer = 1;
+      for (; pointer + num_characters < str.size(); pointer++)
+      {
+        write_string_oneshot(str.substr(pointer, num_characters));
+        sleep_us(options.per_char_wait_us);
+      }
+
+      if (options.fade_out)
+      {
+        for (; pointer <= str.size(); pointer++)
+        {
+          write_string_oneshot(str.substr(pointer, str.size() - pointer),
+                               {.alignment = StringOptions::Alignment::left});
+          sleep_us(options.per_char_wait_us);
+        }
+      }
+      else
+      {
+        if (options.blink)
+        {
+          for (size_t i = 0; i < num_characters; i++)
+          {
+            blink_char(i, true);
+          }
+        }
+
+        sleep_us(options.end_wait_us);
+
+        if (options.clear_screen)
+        {
+          clear_screen();
+        }
       }
     }
   }
