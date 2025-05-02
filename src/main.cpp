@@ -34,6 +34,11 @@ fork_osc_callback(uint gpio, uint32_t events);
 OscCount
 getCurrentReferenceTicks();
 
+// watches serial input for set-time commands.
+// Might also do the display sometime, perhaps.
+void
+setTime_thread();
+
 // --------------
 
 // ugh, globals
@@ -102,7 +107,7 @@ main()
         Damper{config::dampFactor}
     };
 
-    display.showInfo("Init done");
+    display.showInfo("InitDone");
 
     // main bigloop: get samples, estimate, print.
     while(true)

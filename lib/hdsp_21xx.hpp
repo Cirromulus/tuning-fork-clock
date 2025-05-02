@@ -75,14 +75,16 @@ namespace hdsp21xx
 
     bool blink = false;
     Alignment alignment = Alignment::left;
+    bool nofill = false;  // do not fill unset chars with spaces
   };
 
   struct RunningTextOptions
   {
-    uint32_t per_char_wait_us = 750'000 / 8;
-    uint32_t initial_wait_us = 750'000;
-    std::optional<uint32_t> end_wait_us = std::nullopt; // this means "stay on"!
+    uint32_t per_char_wait_us = 100'000;
+    uint32_t initial_wait_us = 700'000;
+    uint32_t end_wait_us = initial_wait_us / 2;
     bool blink = false;
+    bool clear_screen = false;
     uint32_t cycles = 1;
   };
 }
@@ -158,7 +160,7 @@ public:
     const std::string_view sanitizedStr = str.substr(0, num_characters);
     const size_t startOfString = options.alignment == StringOptions::Alignment::left ? 0 : num_characters - sanitizedStr.size();
 
-    for (size_t i = 0; i < startOfString; i++)
+    for (size_t i = 0; !options.nofill && i < startOfString; i++)
     {
       write_builtin_char(i, ' ');
     }
@@ -166,7 +168,7 @@ public:
     {
       write_builtin_char(i, sanitizedStr[i - startOfString], options.blink);
     }
-    for (size_t i = startOfString + sanitizedStr.size(); i < num_characters; i++)
+    for (size_t i = startOfString + sanitizedStr.size(); !options.nofill && i < num_characters; i++)
     {
       write_builtin_char(i, ' ');
     }
@@ -199,9 +201,11 @@ public:
           blink_char(i, true);
         }
       }
-      if (options.end_wait_us)
+
+      sleep_us(options.end_wait_us);
+
+      if (options.clear_screen)
       {
-        sleep_us(*options.end_wait_us);
         clear_screen();
       }
     }

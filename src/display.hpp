@@ -78,7 +78,15 @@ public:
                 const auto [end, code] = std::to_chars(mBuffer.begin(), mBuffer.end(), mCurrentDrift_ms / 1'000.);
                 if (code == std::errc())    // this is considered a success. meh.
                 {
-                    mDriver.write_string_oneshot(std::string_view{mBuffer.begin(), end}, {.alignment = StringOptions::Alignment::left});
+                    const std::string_view numberstr{mBuffer.begin(), end};
+                    mDriver.write_string_oneshot(numberstr,
+                                                {.alignment = StringOptions::Alignment::left,
+                                                 .nofill = true});
+                    for (size_t i = numberstr.size(); i < mDriver.num_characters - 1; i++)
+                    {
+                        // manually fill spaces except last element
+                        mDriver.write_builtin_char(i, ' ');
+                    }
                     static constexpr char deltaChar = 0x07;
                     // overwrite last char with delta sign
                     mDriver.write_builtin_char(7, deltaChar, true);
