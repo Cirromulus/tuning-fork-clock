@@ -13,6 +13,69 @@
 
 class TimeParser
 {
+    static constexpr std::optional<uint8_t>
+    convertCharacterToNumber(char c)  // convert individual ASCII character to interger
+    {
+        if (c >= '0' && c <= '9')
+        {
+            return (c - '0') + 0;
+        }
+        return std::nullopt;
+    }
+
+    static constexpr std::expected<TimeType, std::string_view>
+    stringToInt(const std::string_view& input)
+    {
+        if (input.size() == 0)  // sanity check if there is any data in the Slice
+        {
+            return std::unexpected("empty parse string");
+        }
+        TimeType result = 0;
+
+        // This constant defines the maximal value that can still be multiplied with 'base' and
+        // contained in the <TimeType>-Range.
+        constexpr TimeType maxSafeMultiplicationValue = std::numeric_limits<TimeType>::max() / 10;
+        constexpr bool hasTimeTypeNegativeValues = std::numeric_limits<TimeType>::min() < 0;
+
+        // check for negative input
+        if (input[0] == '-')
+        {
+            return std::unexpected("Encountered minus sign: I don't care for the past");
+        }
+
+        for (const auto& c : input)  // converting character in buffer to one integer
+        {
+            // multiplication overflow check here
+            // It checks if 'result' does not exceed 'maxSafeMultiplicationValue' and therefore can be
+            // multiplied with 'base' without causing an overflow.
+            if (result > maxSafeMultiplicationValue)
+            {
+                return std::unexpected("Integer overflow: Mult");
+            }
+
+            result *= 10;
+            const auto maybeNextNumber = convertCharacterToNumber(c);
+            if (!maybeNextNumber.has_value())
+            {
+                return std::unexpected("Encountered invalid character");
+            }
+
+            // additon overflow check here
+            // Checks if the remaining space in the <TimeType> range is bigger than the number to add.
+            // This makes sure that the new result fits into the <TimeType> range.
+            const auto& nextNumber = maybeNextNumber.value();
+
+            if ((std::numeric_limits<TimeType>::max() - result) < nextNumber)
+            {
+                return std::unexpected("Integer overflow: Add");
+            }
+
+            result += nextNumber;
+        }
+
+        return result;
+    }
+
 
 public:
     constexpr
@@ -45,9 +108,14 @@ public:
     std::expected<TimeType, std::string_view>
     parseBuffer()
     {
-        // todo
+        if (mWritePointer < 4)
+        {
+            // We expect to be at least one second away from 1970
+            return std::unexpected("Too small value");
+        }
+        const auto maybeParsedTime = stringToInt(std::string_view(mParseBuffer.begin(), mWritePointer));
         reset();
-        return std::unexpected("Not implemented, lol");
+        return maybeParsedTime;
     }
 
     constexpr
@@ -92,13 +160,13 @@ public:
             const auto maybeParsedTime_ms = mTimeParser.parseBuffer();
             if (maybeParsedTime_ms)
             {
-                printf("Applying timestamp %d\n", *maybeParsedTime_ms);
+                // OK is the magic ACK value
+                printf("Applying timestamp %d: OK\n", *maybeParsedTime_ms);
                 if (maybeDisplay)
                 {
                     maybeDisplay->get().showInfo("Set Time");
                 }
                 timeManager.setAbsoluteTime_ms(*maybeParsedTime_ms);
-                printf("OK");   // this is the magic ACK value
             }
             else
             {

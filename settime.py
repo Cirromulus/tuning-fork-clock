@@ -29,10 +29,10 @@ assert(device.is_open)
 
 while True:
     s = getTimeString()
-    print("-> ", s)
+    print("--> ", s)
     device.write((s + '\n').encode('ascii'))
-    ret = device.readline().decode('ascii')
+    ret = device.readline().decode('ascii').strip()
     if ret:
-        print ("<- ", ret)
-        if ret == 'OK':
+        print ("<-- ", ret)
+        if 'OK' in ret:
             break
