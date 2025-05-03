@@ -6,6 +6,7 @@
 #include <string_view>
 #include <charconv>
 #include <ctime>
+#include <cstdio>   // only for debug print
 
 class ClockDisplay
 {
@@ -43,14 +44,14 @@ public:
 
     constexpr
     void
-    setElapsedTimeSinceBoot_us(uint64_t const& elapsedTime_us)
+    setElapsedTimeSinceBoot_us(const AbsTime& elapsedTime_us)
     {
         mElapsedSinceBoot_s = elapsedTime_us / 1'000'000;
     }
 
     constexpr
     void
-    setAbsoluteTime_us(const uint64_t& absoluteTime_us)
+    setAbsoluteTime_us(const AbsTime& absoluteTime_us)
     {
         mAbsoluteTime_s = absoluteTime_us / 1'000'000;
     }
@@ -58,9 +59,9 @@ public:
     // optional input so that we can disable in in runtime if reference disconnects
     constexpr
     void
-    setCurrentDrift_us(const std::optional<uint64_t>& maybeDrift_us)
+    setCurrentDrift_us(const std::optional<DiffTime>& maybeDrift_us)
     {
-        mDrift_ms = maybeDrift_us.transform([](const auto drift_us){return drift_us / 1'000;});
+        mDrift_ms = maybeDrift_us.transform([](const auto& drift_us){return drift_us / 1'000;});
     }
 
     void
@@ -137,7 +138,8 @@ public:
             {
                 // Display as a float with ms precision
                 // check for mDrift_ms.has_value() should be done in transition...
-                const auto [end, code] = std::to_chars(mBuffer.begin(), mBuffer.end(), *mDrift_ms / 1'000.);
+                const float drift_s = *mDrift_ms / 1'000.;
+                const auto [end, code] = std::to_chars(mBuffer.begin(), mBuffer.end(), drift_s);
                 if (code == std::errc())    // this is considered a success. meh.
                 {
                     const std::string_view numberstr{mBuffer.begin(), end};
@@ -156,6 +158,7 @@ public:
                 else
                 {
                     showError("driftStr");
+                    printf("String error drift: Could not print %f to screen\n", drift_s);
                 }
             }
             break;
@@ -187,9 +190,9 @@ private:
     }
 
     // Todo: Beauty
-    std::optional<uint64_t> mDrift_ms {std::nullopt};
-    std::optional<uint32_t> mAbsoluteTime_s {std::nullopt};
-    uint32_t mElapsedSinceBoot_s{0};
+    std::optional<DiffTime> mDrift_ms {std::nullopt};
+    std::optional<AbsTime> mAbsoluteTime_s {std::nullopt};
+    AbsTime mElapsedSinceBoot_s{0};
 
     std::array<char, HDSP21XX::num_characters> mBuffer;
 

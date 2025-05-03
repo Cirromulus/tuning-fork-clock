@@ -9,6 +9,8 @@
 #include "csvlogger.hpp"
 #include "absolute_time.hpp"
 #include "command.hpp"
+#include "reference_tick.hpp"
+
 // #include "tests.hpp"
 
 #include <pico/stdlib.h>
@@ -30,10 +32,6 @@ env_sample_callback(repeating_timer_t *rt);
 // the forc cycle counter
 void
 fork_osc_callback(uint gpio, uint32_t events);
-
-// this will be fed by external reference or internal Pico-OSC
-OscCount
-getCurrentReferenceTicks();
 
 // TODO: Add thread that
 // watches serial input for set-time commands.
@@ -190,15 +188,26 @@ main()
             // ------ The Interesting Thing ------
             const auto delta = timeEstimator.consumeNextMeasurement(lastEnvironmentSample->temperature_centidegree);
             time.increaseDelta_us(delta);
+            const auto currentDriftSinceBoot_us = clocksource::getTimeSinceReferenceStable_us() - time.getElapsedTimeSinceBoot_us();
             // -----------------------------------
+
 
             // --- print current time to screen ---
             display.setElapsedTimeSinceBoot_us(time.getElapsedTimeSinceBoot_us());
-            const auto currentDrift_us = (time_us_64() - time.getElapsedTimeSinceBoot_us());
-            display.setCurrentDrift_us(currentDrift_us);
             if (const auto maybeAbsoluteTime_us = time.getAbsoluteTime_us())
             {
                 display.setAbsoluteTime_us(*maybeAbsoluteTime_us);
+                if (const auto maybeDriftSinceUpdate_us = time.getDriftWhenAbsoluteTimeWasSet_us())
+                {
+                    // if we have it, show drift since set of time.
+                    // FIXME: This decision probably should be done in the display itself.
+                    display.setCurrentDrift_us(currentDriftSinceBoot_us - *maybeDriftSinceUpdate_us);
+                }
+            }
+            else
+            {
+                // No absolute time, show drift since boot
+                display.setCurrentDrift_us(currentDriftSinceBoot_us);
             }
             display.update();
             // ------------------------------------
@@ -207,7 +216,7 @@ main()
             logger.addDataPoint(oscCount,
                                 time.getElapsedTimeSinceBoot_us(),
                                 timeEstimator.getEstimatedForkTemperature(),
-                                currentDrift_us,
+                                currentDriftSinceBoot_us,
                                 *lastEnvironmentSample);
             // ------------------------------------
         }
@@ -223,7 +232,7 @@ void fork_osc_callback(uint gpio, uint32_t events)
     static size_t currentCycle = 0;
     if (currentCycle >= config::periodsPerMeasurement)
     {
-        const OscCount now = getCurrentReferenceTicks();
+        const AbsTime now = clocksource::getCurrentReferenceTicks();
         const OscCount diff = now - oscCount;
         oscCount = now;
         currentCycle = 0;
@@ -249,10 +258,3 @@ env_sample_callback(repeating_timer_t*)
     return true; // keep repeating
 }
 
-OscCount
-getCurrentReferenceTicks()
-{
-    // Currently, only internal clack is a reference.
-    // TODO: Make PIO counter for external reference
-    return time_us_64();
-}

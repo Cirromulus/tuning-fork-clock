@@ -12,6 +12,11 @@
 // Benefit is that it only takes one register read.
 using OscCount = uint32_t;
 
+// To track microseconds "absolute time" (posix timestamp or since boot)
+using AbsTime = uint64_t;
+// used for drift etc
+using DiffTime = int64_t;
+
 namespace config
 {
 // should be big enough for allowing I2C measuring traffic.
@@ -25,7 +30,7 @@ static constexpr double expectedDeviation = expectedOscFreq * .10;
 
 static constexpr size_t periodsPerMeasurement = expectedOscFreq;
 
-static constexpr size_t referenceClockFrequency = 1000 * 1000;  // us per count
+static constexpr size_t referenceClockFrequency = 1'000'000;  // us per count
 
 // Count resolution is currently 1 us
 static constexpr

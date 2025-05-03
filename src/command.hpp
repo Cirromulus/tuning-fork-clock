@@ -1,6 +1,7 @@
 #pragma once
 
 #include "absolute_time.hpp"
+#include "reference_tick.hpp"
 #include "display.hpp"    // a little bit ugly from SW design perspective
 
 #include <string_view>
@@ -25,19 +26,19 @@ class TimeParser
         return std::nullopt;
     }
 
-    static constexpr std::expected<TimeType, std::string_view>
+    static constexpr std::expected<AbsTime, std::string_view>
     stringToInt(const std::string_view& input)
     {
         if (input.size() == 0)  // sanity check if there is any data in the Slice
         {
             return std::unexpected("empty parse string");
         }
-        TimeType result = 0;
+        AbsTime result = 0;
 
         // This constant defines the maximal value that can still be multiplied with 'base' and
-        // contained in the <TimeType>-Range.
-        constexpr TimeType maxSafeMultiplicationValue = std::numeric_limits<TimeType>::max() / 10;
-        constexpr bool hasTimeTypeNegativeValues = std::numeric_limits<TimeType>::min() < 0;
+        // contained in the <AbsTime>-Range.
+        constexpr AbsTime maxSafeMultiplicationValue = std::numeric_limits<AbsTime>::max() / 10;
+        constexpr bool hasAbsTimeNegativeValues = std::numeric_limits<AbsTime>::min() < 0;
 
         // check for negative input
         if (input[0] == '-')
@@ -62,11 +63,11 @@ class TimeParser
             }
 
             // additon overflow check here
-            // Checks if the remaining space in the <TimeType> range is bigger than the number to add.
-            // This makes sure that the new result fits into the <TimeType> range.
+            // Checks if the remaining space in the <AbsTime> range is bigger than the number to add.
+            // This makes sure that the new result fits into the <AbsTime> range.
             const uint8_t& currentDigit = maybeNextNumber.value();
 
-            if ((std::numeric_limits<TimeType>::max() - result) < currentDigit)
+            if ((std::numeric_limits<AbsTime>::max() - result) < currentDigit)
             {
                 return std::unexpected("Integer overflow: Add");
             }
@@ -107,7 +108,7 @@ public:
     }
 
     constexpr
-    std::expected<TimeType, std::string_view>
+    std::expected<AbsTime, std::string_view>
     parseBuffer()
     {
         if (mWritePointer < 4)
@@ -129,7 +130,7 @@ public:
     }
 
 private:
-    static constexpr size_t max_uint64_digits = ceil(log10(std::numeric_limits<TimeType>::max()));
+    static constexpr size_t max_uint64_digits = ceil(log10(std::numeric_limits<AbsTime>::max()));
     static constexpr std::string_view expected_format {"1746090482222"};    // ms
     static_assert(max_uint64_digits >= expected_format.size());
 
@@ -237,7 +238,8 @@ public:
                 {
                     maybeDisplay->get().showInfo("Set Time", {.end_wait_us = 200'000});
                 }
-                timeManager.setAbsoluteTime_ms(*maybeParsedTime_ms);
+
+                timeManager.setAbsoluteTime_ms(*maybeParsedTime_ms, clocksource::getTimeSinceReferenceStable_us());
             }
             else
             {
