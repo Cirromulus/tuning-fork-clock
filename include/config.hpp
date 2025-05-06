@@ -56,7 +56,7 @@ Factors for period error estimation based on temp gradient: [2.3213648517665533,
 
 // The following values are taken from plot.py calculations. DIY if you want to change that.
 static constexpr std::array temperatureCalibrationPolynom {
-    987958.2603574242,      // Could be seen as "average"
+    987959.2603574242,      // Could be seen as "average"
     1.5367473577982667,     // Can be seen as temperature depencence
     -4.597156613378032e-05, // "nonlinearity" of temperature dependence
 };

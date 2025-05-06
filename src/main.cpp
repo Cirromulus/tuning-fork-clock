@@ -177,7 +177,7 @@ main()
         {
             // we never had a valid reading
             status.invalidTempReading();
-            display.showError("Err: Temp was never read");
+            display.showError("No Temp Yet");
             continue;
         }
 

@@ -93,32 +93,24 @@ public:
             {
                 const time_t now_stamp = *mAbsoluteTime_s;
                 const std::tm* now = std::localtime(&now_stamp);
-                // TODO: make separate function, how ugly is that
                 size_t c = 0;
-                mDriver.write_builtin_char(c++, (now->tm_hour / 10) + '0');
-                mDriver.write_builtin_char(c++, (now->tm_hour % 10) + '0');
+                writeChars<2>(c, now->tm_hour);
                 mDriver.write_builtin_char(c++, ':', true);
-                mDriver.write_builtin_char(c++, (now->tm_min / 10) + '0');
-                mDriver.write_builtin_char(c++, (now->tm_min % 10) + '0');
+                writeChars<2>(c, now->tm_min);
                 mDriver.write_builtin_char(c++, ':', true);
-                mDriver.write_builtin_char(c++, (now->tm_sec / 10) + '0');
-                mDriver.write_builtin_char(c++, (now->tm_sec % 10) + '0');
+                writeChars<2>(c, now->tm_sec);
             }
             break;
             case DisplayState::absoluteTime_calendar:
             {
                 const time_t now_stamp = *mAbsoluteTime_s;
                 const std::tm* now = std::localtime(&now_stamp);
-                // TODO: make separate function, how ugly is that
                 size_t c = 0;
-                mDriver.write_builtin_char(c++, (now->tm_mday / 10) + '0');
-                mDriver.write_builtin_char(c++, (now->tm_mday % 10) + '0');
+                writeChars<2>(c, now->tm_mday);
                 mDriver.write_builtin_char(c++, '.');
-                mDriver.write_builtin_char(c++, (now->tm_mon / 10) + '0');
-                mDriver.write_builtin_char(c++, (now->tm_mon % 10) + '0');
+                writeChars<2>(c, now->tm_mon+1);
                 mDriver.write_builtin_char(c++, '.');
-                mDriver.write_builtin_char(c++, ((now->tm_year / 10) % 10) + '0');
-                mDriver.write_builtin_char(c++, (now->tm_year % 10) + '0');
+                writeChars<2>(c, now->tm_year);
             }
             break;
             case DisplayState::elapsedTimeSinceBoot:
@@ -187,6 +179,21 @@ private:
         {
             return DisplayState::elapsedTimeSinceBoot;
         }
+    }
+
+    template <size_t numDigits>
+    constexpr
+    void
+    writeChars(size_t& offset, const auto& number)
+    {
+        size_t tenthSequence = 1;
+        for (size_t digit = 1; digit <= numDigits; digit++)
+        {
+            const char c = ((number / tenthSequence) % 10) + '0';
+            mDriver.write_builtin_char(offset + (numDigits - digit), c);
+            tenthSequence *= 10;
+        }
+        offset += numDigits;
     }
 
     // Todo: Beauty
