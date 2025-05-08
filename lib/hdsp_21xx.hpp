@@ -241,6 +241,7 @@ public:
       }
       else
       {
+        // not fading out
         if (options.blink)
         {
           for (size_t i = 0; i < num_characters; i++)

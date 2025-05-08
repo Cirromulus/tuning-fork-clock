@@ -8,8 +8,8 @@
 #include "display.hpp"
 #include "csvlogger.hpp"
 #include "absolute_time.hpp"
-#include "command.hpp"
 #include "reference_tick.hpp"
+#include "command.hpp"
 
 // #include "tests.hpp"
 

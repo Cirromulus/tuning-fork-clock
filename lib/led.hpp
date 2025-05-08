@@ -7,7 +7,7 @@
 
 class WS2812LED
 {
-
+    // TODO: Make that a parameter.
     PIO pio = pio0;
     uint sm = 0;
     int offset;
