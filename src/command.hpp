@@ -239,7 +239,7 @@ public:
                     maybeDisplay->get().showInfo("Set Time", {.end_wait_us = 200'000});
                 }
 
-                timeManager.setAbsoluteTime_ms(*maybeParsedTime_ms, clocksource::getTimeSinceReferenceStable_us());
+                timeManager.setAbsoluteTime_ms(*maybeParsedTime_ms, clocksource::Internal::getTimeSinceReferenceStable_us());
             }
             else
             {

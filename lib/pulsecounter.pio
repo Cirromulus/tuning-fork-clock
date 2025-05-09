@@ -1,4 +1,4 @@
-.pio_version 0 // ??
+; .pio_version 0 // ??
 
 .program pulsecounter
 

@@ -5,8 +5,6 @@
 #include <limits>
 #include <array>
 
-#define GPIO_WATCH_PIN 29    // Near "GND" for less cable tangling
-
 // wrap every 1 hour if measuring microseconds.
 // We don't expect that slow osc cycles.
 // Benefit is that it only takes one register read.
@@ -19,6 +17,14 @@ using DiffTime = int64_t;
 
 namespace config
 {
+
+// Near "GND" for less cable tangling
+static constexpr unsigned forkWatchPin = 29;
+
+static constexpr unsigned referenceClockPin = 8;
+
+static constexpr AbsTime referenceClockFrequency = 1'000'000;  // us per count
+
 // should be big enough for allowing I2C measuring traffic.
 // This is translatable via `fifoSize * periodsPerMeasurement / expectedOscFreq`
 // = number of seconds until fifo is full
@@ -29,8 +35,6 @@ static constexpr double expectedOscFreq = 440;
 static constexpr double expectedDeviation = expectedOscFreq * .10;
 
 static constexpr size_t periodsPerMeasurement = expectedOscFreq;
-
-static constexpr size_t referenceClockFrequency = 1'000'000;  // us per count
 
 // Count resolution is currently 1 us
 static constexpr

@@ -66,6 +66,20 @@ main()
     ClockDisplay display{expander, displayPinSetup};
     display.showInfo("Startup", {.fade_in = true, .fade_out = true});
 
+    clocksource::External<config::forkWatchPin, //config::referenceClockPin,
+                          config::referenceClockFrequency> externalClockSource;
+
+    while (true)
+    {
+        const auto timeSinceStable_us = externalClockSource.getTimeSinceReferenceStable_us();
+        printf("Time since ReferenceClock: %llu\n", timeSinceStable_us);
+        const auto maybeSomeThing = externalClockSource.lookIntoStateMachine();
+        printf("Something inside: %d\n", maybeSomeThing.value_or(-1));
+        display.setElapsedTimeSinceBoot_us(timeSinceStable_us);
+        display.update();
+        sleep_ms(1000);
+    }
+
     BME280 bme{setupTempI2c()};
     // this will block forever
     // bmeTest(bme);
@@ -89,9 +103,9 @@ main()
 
 
     queue_init(&period_fifo, sizeof(OscCount), config::fifoSize);
-    gpio_init(GPIO_WATCH_PIN);
-    gpio_set_pulls(GPIO_WATCH_PIN, false, true);    // "Weak" pulldown
-    gpio_set_irq_enabled_with_callback(GPIO_WATCH_PIN, GPIO_IRQ_EDGE_RISE, true, &fork_osc_callback);
+    gpio_init(config::forkWatchPin);
+    gpio_set_pulls(config::forkWatchPin, false, true);    // "Weak" pulldown
+    gpio_set_irq_enabled_with_callback(config::forkWatchPin, GPIO_IRQ_EDGE_RISE, true, &fork_osc_callback);
 
     // -- init done --
 
@@ -188,7 +202,7 @@ main()
             // ------ The Interesting Thing ------
             const auto delta = timeEstimator.consumeNextMeasurement(lastEnvironmentSample->temperature_centidegree);
             time.increaseDelta_us(delta);
-            const auto currentDriftSinceBoot_us = clocksource::getTimeSinceReferenceStable_us() - time.getElapsedTimeSinceBoot_us();
+            const auto currentDriftSinceBoot_us = clocksource::Internal::getTimeSinceReferenceStable_us() - time.getElapsedTimeSinceBoot_us();
             // -----------------------------------
 
 
@@ -232,7 +246,7 @@ void fork_osc_callback(uint gpio, uint32_t events)
     static size_t currentCycle = 0;
     if (currentCycle >= config::periodsPerMeasurement)
     {
-        const AbsTime now = clocksource::getCurrentReferenceTicks();
+        const AbsTime now = clocksource::Internal::getCurrentReferenceTicks();
         const OscCount diff = now - oscCount;
         oscCount = now;
         currentCycle = 0;
