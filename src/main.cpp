@@ -41,13 +41,15 @@ fork_osc_callback(uint gpio, uint32_t events);
 // --------------
 
 // ugh, globals
-static OscCount oscCount = 0;
 queue_t period_fifo;
 
 // will be set to true by environment samle timer
 static volatile bool shouldSampleEnvironment = false;
 repeating_timer_t environment_sample_timer;
 
+using ExternalReferenceClock = clocksource::External<config::referenceClockPin,
+                                                     config::referenceClockFrequency>;
+ExternalReferenceClock* externalReferenceClock;
 
 int
 main()
@@ -66,11 +68,9 @@ main()
     ClockDisplay display{expander, displayPinSetup};
     display.showInfo("Startup", {.fade_in = true, .fade_out = true});
 
-    clocksource::External<config::forkWatchPin, // config::referenceClockPin,
-                          config::referenceClockFrequency> externalClockSource;
-
-    externalSourceTest(externalClockSource, display);
-
+    ExternalReferenceClock externalClockSource{};   // init only now.
+    externalReferenceClock = &externalClockSource;  // register for interrupt
+    // externalSourceTest(externalClockSource, display);
 
     BME280 bme{setupTempI2c()};
     // this will block forever
@@ -133,8 +133,8 @@ main()
             // --------------------------------------------------------------
             // No new updates, but now and here would be time to do something
             // TODO: make this more understandable
-            const auto maybeChar = getchar_timeout_us(1);
-            if (maybeChar != PICO_ERROR_TIMEOUT)
+            const auto maybeChar = getchar_timeout_us(0);
+            if (maybeChar > 0)
             {
                 commandParser.consumeCharacter(static_cast<char>(maybeChar));
             }
@@ -236,11 +236,32 @@ void fork_osc_callback(uint gpio, uint32_t events)
     // Hot cycle:
     // The more repeatable this counts, the better phase variance gets
     static size_t currentCycle = 0;
+    static AbsTime cycleStartTime = 0;
+
     if (currentCycle >= config::periodsPerMeasurement)
     {
-        const AbsTime now = clocksource::Internal::getCurrentReferenceTicks();
-        const OscCount diff = now - oscCount;
-        oscCount = now;
+        static bool useExternalClock = true;
+        std::optional<AbsTime> now = std::nullopt;
+        if (useExternalClock)
+        {
+            now = externalReferenceClock->getCurrentReferenceTicks();
+            if (!now)
+            {
+                useExternalClock = false;
+                // Timing is broken anyway. Print is OK.
+                printf("WARN: Could not get external reference clock value.\n");
+                printf("WARN: This is now deactivated forever (until reboot)!\n");
+                now = clocksource::Internal::getCurrentReferenceTicks();
+            }
+        }
+        else
+        {
+            now = clocksource::Internal::getCurrentReferenceTicks();
+        }
+
+        clocksource::Internal::getCurrentReferenceTicks();
+        const DiffTime diff = *now - cycleStartTime;
+        cycleStartTime = *now;
         currentCycle = 0;
         if (!queue_try_add(&period_fifo, &diff))
         {
