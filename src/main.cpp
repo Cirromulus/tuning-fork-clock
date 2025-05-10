@@ -71,12 +71,12 @@ main()
 
     while (true)
     {
-        const auto timeSinceStable_us = externalClockSource.getTimeSinceReferenceStable_us();
-        printf("Time since ReferenceClock: %llu\n", timeSinceStable_us);
+        // const auto timeSinceStable_us = externalClockSource.getTimeSinceReferenceStable_us();
+        // printf("Time since ReferenceClock: %llu\n", timeSinceStable_us);
         const auto maybeSomeThing = externalClockSource.lookIntoStateMachine();
         printf("Something inside: %d\n", maybeSomeThing.value_or(-1));
-        display.setElapsedTimeSinceBoot_us(timeSinceStable_us);
-        display.update();
+        // display.setElapsedTimeSinceBoot_us(timeSinceStable_us);
+        // display.update();
         sleep_ms(1000);
     }
 

@@ -3,32 +3,35 @@
 .program pulsecounter
 
 public entry_point:
-    MOV X !null    // Fill with ones
-    MOV Y null      // Y is zero to compare
+    MOV Y !null    // Fill with ones. Is the counter register.
+    MOV X null     // X is zero to compare against FIFO
 .wrap_target
 wait_high_edge:
     WAIT 0 PIN 0
     WAIT 1 PIN 0
-    JMP X-- write_value_to_fifo // Only used for decrement
-write_value_to_fifo:
-    MOV ISR !X  // I don't know a way to directly write X or decrement OSR
-    PUSH NOBLOCK
-    // IRQ SET 1   // Notify that new value counted
-    //             // (not really necessary as FIFO also has status bit, I think)
-    JMP X != Y wait_high_edge   // so if not zero -> not wrapped
-notify:
+    JMP Y-- check_wrap  // Just used for decrement
+check_wrap:
+    JMP X != Y check_output_request // if not zero, counter has not wrapped.
     IRQ SET 0   // Notify that counter has wrapped.
+check_output_request:
+    PULL NOBLOCK    // If empty, copies X to OSR. X should be always zero.
+    MOV X OSR       // Can't compare directly against OSR
+    JMP !X wait_high_edge   // If (maybe) received value is zero, it is a NOT a request
+push_value_out:
+    MOV ISR !Y // I don't know a way to directly write X or decrement OSR. Conveniently it is inverted for the correct counter value.
+    PUSH NOBLOCK    // Push out the current (inverted) value of counter Y
+    MOV X null  // reset x to zero which previously was a FIFO input request
 .wrap
 
 % c-sdk {
 #include "hardware/clocks.h"
 
 static inline void pulsecounter_program_init(PIO pio, uint sm, uint offset, uint pin) {
-
-    pio_gpio_init(pio, pin);
-    pio_sm_set_consecutive_pindirs(pio, sm, pin, 1, false);  // false -> set as input
-
     pio_sm_config c = pulsecounter_program_get_default_config(offset);
+    sm_config_set_in_pins(&c, pin); // set pio "in 0" to given pin
+    pio_sm_set_consecutive_pindirs(pio, sm, pin, 1, false);  // false -> set as input
+    pio_gpio_init(pio, pin);    // connect pin to this pio block
+
     pio_sm_init(pio, sm, offset, &c);
     pio_sm_set_enabled(pio, sm, true);
 }

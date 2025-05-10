@@ -36,19 +36,18 @@ struct External
 
     // This is static, so for the same pin we can't have different counters callbacks.
     // ... which seems sensible
-    static uint32_t counterLow;
     static uint32_t counterHigh;
 
     static void
     counterHasWrapped()
     {
+        printf("CounterWrapped\n");
         counterHigh++;
     }
 
 public:
     External()
     {
-        counterLow = 0;
         counterHigh = 0;
         gpio_init(inputPinNr);
         gpio_set_pulls(inputPinNr, false, true);    // "Weak" pulldown
@@ -59,24 +58,6 @@ public:
         }
 
         pulsecounter_program_init(pio, sm, offset, inputPinNr);
-
-        dmaChannel = dma_claim_unused_channel(true);
-        if (dmaChannel < 0)
-        {
-            printf("Err: Could not claim unused DMA channel\n");
-        }
-
-        dma_channel_config dc = dma_channel_get_default_config(dmaChannel);
-        channel_config_set_transfer_data_size(&dc, DMA_SIZE_32);
-        channel_config_set_read_increment(&dc, false);
-        channel_config_set_write_increment(&dc, false);
-        channel_config_set_dreq(&dc, pio_get_dreq(pio, sm, false));
-        dma_channel_configure(dmaChannel, &dc,
-            &counterLow,
-            &pio->rxf[sm],
-            1, // one transfer per data request
-            true
-        );
 
         // Find a free irq
         int pio_irq = pio_get_irq_num(pio, 0);
@@ -112,6 +93,9 @@ public:
     AbsTime
     getCurrentReferenceTicks()
     {
+        pio_sm_put(pio, sm, 1);     // any non-zero value is considered a request
+        // TODO: This should be a check with timeout
+        const uint32_t counterLow = pio_sm_get(pio, sm);
         return counterLow | static_cast<AbsTime>(counterHigh) << 32;
     }
 
@@ -126,10 +110,6 @@ public:
 };
 
 // I hope that this does not lead to multiple different counters...
-
-template <unsigned inputPinNr, AbsTime referenceClockFrequency>
-uint32_t External<inputPinNr, referenceClockFrequency>::counterLow = 0;
-
 template <unsigned inputPinNr, AbsTime referenceClockFrequency>
 uint32_t External<inputPinNr, referenceClockFrequency>::counterHigh = 0;
 
