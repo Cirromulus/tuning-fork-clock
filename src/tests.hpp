@@ -3,6 +3,8 @@
 #include <mcp23017.h>
 #include <lib/bme280.hpp>
 #include <lib/hdsp_21xx.hpp>
+#include "display.hpp"
+#include "reference_tick.hpp"
 
 
 // This file holds more or less stale test functions
@@ -89,5 +91,22 @@ void bmeTest(BME280& bme)
             printf("No worky-work\n");
         }
         sleep_ms(1000);
+    }
+}
+
+template <typename ExternalSource>
+void externalSourceTest(const ExternalSource& externalClockSource, ClockDisplay& display)
+{
+    while (true)
+    {
+        const auto timeSinceStable_us = externalClockSource.getTimeSinceReferenceStable_us();
+        if (timeSinceStable_us)
+        {
+            printf("Time since ReferenceClock: %llu\n", timeSinceStable_us);
+            // const auto maybeSomeThing = externalClockSource.lookIntoStateMachine();
+            // printf("Something inside: %d\n", maybeSomeThing.value_or(-1));
+            display.setElapsedTimeSinceBoot_us(timeSinceStable_us.value_or(0) * 1'000'000);
+            display.update();
+        }
     }
 }

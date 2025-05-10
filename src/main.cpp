@@ -11,7 +11,7 @@
 #include "reference_tick.hpp"
 #include "command.hpp"
 
-// #include "tests.hpp"
+#include "tests.hpp"
 
 #include <pico/stdlib.h>
 #include <pico/util/queue.h>
@@ -66,21 +66,11 @@ main()
     ClockDisplay display{expander, displayPinSetup};
     display.showInfo("Startup", {.fade_in = true, .fade_out = true});
 
-    clocksource::External<config::forkWatchPin, //config::referenceClockPin,
+    clocksource::External<config::forkWatchPin, // config::referenceClockPin,
                           config::referenceClockFrequency> externalClockSource;
 
-    while (true)
-    {
-        const auto timeSinceStable_us = externalClockSource.getTimeSinceReferenceStable_us();
-        if (timeSinceStable_us)
-        {
-            printf("Time since ReferenceClock: %llu\n", timeSinceStable_us);
-            // const auto maybeSomeThing = externalClockSource.lookIntoStateMachine();
-            // printf("Something inside: %d\n", maybeSomeThing.value_or(-1));
-            display.setElapsedTimeSinceBoot_us(timeSinceStable_us.value_or(0) * 1'000'000);
-            display.update();
-        }
-    }
+    externalSourceTest(externalClockSource, display);
+
 
     BME280 bme{setupTempI2c()};
     // this will block forever

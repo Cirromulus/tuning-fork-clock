@@ -42,7 +42,6 @@ struct External
     static void
     counterHasWrapped()
     {
-        printf("CounterWrapped\n");
         counterHigh++;
     }
 
@@ -58,8 +57,6 @@ public:
             printf("Err: could not claim free PIO sm for pulsecounter program\n");
         }
 
-        pulsecounter_program_init(pio, sm, offset, inputPinNr);
-
         // Find a free irq
         int pio_irq = pio_get_irq_num(pio, 0);
         if (irq_get_exclusive_handler(pio_irq)) {
@@ -73,6 +70,8 @@ public:
         irq_set_enabled(pio_irq, true); // Enable the IRQ
         const uint irq_index = pio_irq - pio_get_irq_num(pio, 0); // Get index of the IRQ
         pio_set_irqn_source_enabled(pio, irq_index, pio_interrupt_source::pis_interrupt0, true);
+
+        pulsecounter_program_init(pio, sm, offset, inputPinNr);
 
         printf("External source inited.\n");
     }
