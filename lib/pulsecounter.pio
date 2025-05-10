@@ -8,8 +8,12 @@ public entry_point:
 .wrap_target
 wait_high_edge:
     WAIT 0 PIN 0
+    // TODO: Check for output request also here, to
+    // make the sent value "on average" correct!
+    // without that, it is on average +0.5 ticks too late.
     WAIT 1 PIN 0
-    JMP Y-- check_wrap  // Just used for decrement
+    JMP Y-- wait_high_edge  // Just used for decrement.
+wait_high_edge:
 check_wrap:
     JMP X != Y check_output_request // if not zero, counter has not wrapped.
     IRQ SET 0   // Notify that counter has wrapped.
