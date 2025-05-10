@@ -114,6 +114,10 @@ public:
                 break;
             }
         }
+        // TODO: If called, we will always wait for one cycle to finish.
+        // This leads to an "always ceil" rounding.
+        // Should we dither that by randomly removing one cycle / blanking LSB?
+
         return counterLow.transform([](const AbsTime& value) {return value | static_cast<AbsTime>(counterHigh) << 32 ;});
     }
 
