@@ -2,26 +2,34 @@
 
 .program pulsecounter
 
+; TODO: Currently, check_output_request is copy-pasted.
+; It copied on the two edges to (on average) return the correct count.
+
 public entry_point:
     MOV Y !null    // Fill with ones. Is the counter register.
     MOV X null     // X is zero to compare against FIFO
 .wrap_target
-wait_high_edge:
+wait_low:
     WAIT 0 PIN 0
-    // TODO: Check for output request also here, to
-    // make the sent value "on average" correct!
-    // without that, it is on average +0.5 ticks too late.
-    WAIT 1 PIN 0
-    JMP Y-- wait_high_edge  // Just used for decrement.
-wait_high_edge:
-check_wrap:
-    JMP X != Y check_output_request // if not zero, counter has not wrapped.
-    IRQ SET 0   // Notify that counter has wrapped.
-check_output_request:
+check_output_request_low:
     PULL NOBLOCK    // If empty, copies X to OSR. X should be always zero.
     MOV X OSR       // Can't compare directly against OSR
-    JMP !X wait_high_edge   // If (maybe) received value is zero, it is a NOT a request
-push_value_out:
+    JMP !X wait_high   // If (maybe) received value is zero, it is a NOT a request
+push_value_out_low:
+    MOV ISR !Y // I don't know a way to directly write X or decrement OSR. Conveniently it is inverted for the correct counter value.
+    PUSH NOBLOCK    // Push out the current (inverted) value of counter Y
+    MOV X null  // reset x to zero which previously was a FIFO input request
+wait_high:
+    WAIT 1 PIN 0
+    JMP Y-- check_wrap  // Just used for decrement.
+check_wrap:
+    JMP X != Y check_output_request_high        // if not zero, counter has not wrapped.
+    IRQ SET 0   // Notify that counter has wrapped.
+check_output_request_high:
+    PULL NOBLOCK    // If empty, copies X to OSR. X should be always zero.
+    MOV X OSR       // Can't compare directly against OSR
+    JMP !X wait_low   // If (maybe) received value is zero, it is a NOT a request
+push_value_out_high:
     MOV ISR !Y // I don't know a way to directly write X or decrement OSR. Conveniently it is inverted for the correct counter value.
     PUSH NOBLOCK    // Push out the current (inverted) value of counter Y
     MOV X null  // reset x to zero which previously was a FIFO input request
