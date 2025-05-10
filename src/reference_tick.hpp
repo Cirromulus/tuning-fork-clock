@@ -7,6 +7,7 @@
 #include <hardware/dma.h>
 // #include <hardware/clocks.h>
 #include <pulsecounter.pio.h>
+#include <pico/time.h>  // Only used for timeout
 
 #include <optional>
 
@@ -90,22 +91,40 @@ public:
         return pio_sm_get(pio, sm);
     }
 
-    AbsTime
-    getCurrentReferenceTicks()
+    std::optional<AbsTime>
+    getCurrentReferenceTicks() const
     {
-        pio_sm_put(pio, sm, 1);     // any non-zero value is considered a request
-        // TODO: This should be a check with timeout
-        const uint32_t counterLow = pio_sm_get(pio, sm);
-        return counterLow | static_cast<AbsTime>(counterHigh) << 32;
+        // If we don't already have something inside...
+        if (pio_sm_is_tx_fifo_empty(pio, sm))
+        {
+            pio_sm_put(pio, sm, 1);     // any non-zero value is considered a request
+        }
+
+        // this is the internal, possibly drifting, MCU time.
+        // Only used for timeout.
+        static constexpr unsigned maxCyclesToWait = 2;
+        static constexpr uint32_t maxTimePerCycle_us = maxCyclesToWait * (referenceClockFrequency / 1'000'000);
+        const auto whenToTimeout = make_timeout_time_us(maxTimePerCycle_us);
+
+        std::optional<AbsTime> counterLow;
+        while(absolute_time_diff_us(get_absolute_time(), whenToTimeout) > 0)
+        {
+            if (!pio_sm_is_rx_fifo_empty(pio, sm))
+            {
+                counterLow = pio_sm_get(pio, sm);
+                break;
+            }
+        }
+        return counterLow.transform([](const AbsTime& value) {return value | static_cast<AbsTime>(counterHigh) << 32 ;});
     }
 
-    AbsTime
-    getTimeSinceReferenceStable_us()
+    std::optional<AbsTime>
+    getTimeSinceReferenceStable_us() const
     {
         static constexpr AbsTime multiplicator = referenceClockFrequency / 1'000'000;
         static_assert (multiplicator * 1'000'000 == referenceClockFrequency,
                         "ReferenceClock not divisible by microseconds without loss");
-        return getCurrentReferenceTicks() / multiplicator;
+        return getCurrentReferenceTicks().transform([](const AbsTime& val){ return val / multiplicator; });
     }
 };
 

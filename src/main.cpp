@@ -71,13 +71,15 @@ main()
 
     while (true)
     {
-        // const auto timeSinceStable_us = externalClockSource.getTimeSinceReferenceStable_us();
-        // printf("Time since ReferenceClock: %llu\n", timeSinceStable_us);
-        const auto maybeSomeThing = externalClockSource.lookIntoStateMachine();
-        printf("Something inside: %d\n", maybeSomeThing.value_or(-1));
-        // display.setElapsedTimeSinceBoot_us(timeSinceStable_us);
-        // display.update();
-        sleep_ms(1000);
+        const auto timeSinceStable_us = externalClockSource.getTimeSinceReferenceStable_us();
+        if (timeSinceStable_us)
+        {
+            printf("Time since ReferenceClock: %llu\n", timeSinceStable_us);
+            // const auto maybeSomeThing = externalClockSource.lookIntoStateMachine();
+            // printf("Something inside: %d\n", maybeSomeThing.value_or(-1));
+            display.setElapsedTimeSinceBoot_us(timeSinceStable_us.value_or(0) * 1'000'000);
+            display.update();
+        }
     }
 
     BME280 bme{setupTempI2c()};
