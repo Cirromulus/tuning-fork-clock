@@ -105,7 +105,9 @@ void externalSourceTest(const ExternalSource& externalClockSource, ClockDisplay&
             printf("Time since ReferenceClock: %llu\n", timeSinceStable_us);
             // const auto maybeSomeThing = externalClockSource.lookIntoStateMachine();
             // printf("Something inside: %d\n", maybeSomeThing.value_or(-1));
-            display.setElapsedTimeSinceBoot_us(timeSinceStable_us.value_or(0) * 1'000'000);
+            const AbsTime& tss_us = *timeSinceStable_us;
+            const AbsTime eightDigits = tss_us % 100'000'000;
+            display.setElapsedTimeSinceBoot_us(eightDigits * 1'000'000);
             display.update();
         }
     }

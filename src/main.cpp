@@ -29,7 +29,7 @@ using namespace std::literals;
 bool
 env_sample_callback(repeating_timer_t *rt);
 
-// the forc cycle counter
+// the fork cycle counter
 void
 fork_osc_callback(uint gpio, uint32_t events);
 
@@ -103,7 +103,10 @@ main()
     queue_init(&period_fifo, sizeof(ForkMeasurement), config::fifoSize);
     gpio_init(config::forkWatchPin);
     gpio_set_pulls(config::forkWatchPin, false, true);    // "Weak" pulldown
-    gpio_set_irq_enabled_with_callback(config::forkWatchPin, GPIO_IRQ_EDGE_RISE, true, &fork_osc_callback);
+    gpio_set_irq_enabled_with_callback(config::forkWatchPin,
+                                        GPIO_IRQ_EDGE_RISE,
+                                        true,
+                                        &fork_osc_callback);
 
     // -- init done --
 
@@ -185,6 +188,9 @@ main()
         {
             display.showError("fTooHigh");
             status.tooHighFrequency();
+            printf("Fork frequency too high: %lu counts for %u cycles\n",
+                    forkMeasurement.internalReference,
+                config::periodsPerMeasurement);
             continue;
         }
         else if (!lastEnvironmentSample)
@@ -244,6 +250,9 @@ main()
 
 void fork_osc_callback(uint gpio, uint32_t events)
 {
+    // we just assume that this callback is only used for the correct gpio
+    // if (gpio != config::forkWatchPin) {...}
+
     // Hot cycle:
     // The more repeatable this counts, the better phase variance gets
     static size_t currentCycle = 0;
@@ -259,7 +268,7 @@ void fork_osc_callback(uint gpio, uint32_t events)
         // I don't know whether this is actually readable or not... if both have value, then do difference.
         newMeasurement.externalReference = now_external.and_then(
                 [](const AbsTime& now){
-                     return cycleStartTime_external.transform(
+                    return cycleStartTime_external.transform(
                         [&now](const AbsTime& startTime){ return static_cast<DiffTime>(now - startTime);}
                     );
                 });

@@ -21,12 +21,16 @@ class ClockDisplay
 
     using StringOptions = HDSP21XX::StringOptions;
 
+    static constexpr uint8_t nightBrightness = 1;
+    static constexpr uint8_t dayBrightness = 5;
+
 public:
 
     constexpr
     ClockDisplay(Mcp23017& expander, HDSP21XXPins const& pinSetup) :
     mDriver{pinSetup, expander}
     {
+        mDriver.set_brightness(dayBrightness);
     }
 
     void
@@ -99,6 +103,9 @@ public:
                 writeChars<2>(c, now->tm_min);
                 mDriver.write_builtin_char(c++, ':', true);
                 writeChars<2>(c, now->tm_sec);
+
+                // While we are at it, we can decide whether it is nighttime or not
+                setBrightnessBasedOnTime(now->tm_hour);
             }
             break;
             case DisplayState::absoluteTime_calendar:
@@ -194,6 +201,19 @@ private:
             tenthSequence *= 10;
         }
         offset += numDigits;
+    }
+
+    static constexpr
+    bool isItNighttime(unsigned hour)
+    {
+        return hour < 5 || hour > 23;
+    }
+
+    constexpr
+    void
+    setBrightnessBasedOnTime(const auto& hour)
+    {
+        mDriver.set_brightness(isItNighttime(hour) ? nightBrightness : dayBrightness);
     }
 
     // Todo: Beauty

@@ -21,7 +21,7 @@ namespace config
 // Near "GND" for less cable tangling
 static constexpr unsigned forkWatchPin = 29;
 
-static constexpr unsigned referenceClockPin = 8;
+static constexpr unsigned referenceClockPin = 9;
 
 static constexpr AbsTime referenceClockFrequency = 1'000'000;  // us per count
 
