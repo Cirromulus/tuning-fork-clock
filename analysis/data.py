@@ -23,13 +23,18 @@ class ColDesc:
 expected_frequency = 1 / 440    # should be the same value as in config.hpp!
 
 TABLE_FORMAT = {
-    'period': ColDesc('Period', 'INTEGER', 'us', expected_frequency),
+    'period_int': ColDesc('PeriodInt', 'INTEGER', 'us', expected_frequency),
+    'period_ext': ColDesc('PeriodExt', 'INTEGER', 'us', expected_frequency),
     'temperature': ColDesc('Temperature', 'INTEGER', 'Degree Celsius', 0.01),
     'pressure': ColDesc('Pressure', 'INTEGER', 'Pa', pow(2,-8)),
     'humidity': ColDesc('Humidity', 'INTEGER', '%RH', pow(2,-10)),
-    'temperature_damped' : ColDesc('TempDamp', 'INTEGER', 'Degree Celsius', 0.01),
-    'period_estimate' : ColDesc('PeriodEstimate', 'INTEGER', 'us', expected_frequency),
-    'time_estimate' : ColDesc('TimeEstimate', 'INTEGER', 'us', 1),
+    'est_time': ColDesc('EstimatedTime', 'INTEGER', 'us', 1),
+    'est_fork_temp' : ColDesc('EstimatedForkTemp', 'INTEGER', 'Degree Celsius', 1),
+    # Human Readables: Currently deactivated
+    # 'est_frequency': ColDesc('EstimatedForkFrequency', 'INTEGER', 'Hz', 1),
+    # Temp Normalized
+    # Pressure Normalized
+    # Humidity Normalized
     'estimate_diff' : ColDesc('EstimateDiff', 'INTEGER', 'us', 1),
 }
 

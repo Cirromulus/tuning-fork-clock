@@ -36,7 +36,7 @@ try:
             continue
 
         if len(elements) < len(data.TABLE_FORMAT):
-            print (f"'{line}' is not of the expected format")
+            print (f"'{line}' is not of the expected format: Got {len(elements)} elements instead of {len(data.TABLE_FORMAT)}")
             continue
 
         if '[' in elements[0]:

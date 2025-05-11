@@ -171,6 +171,9 @@ main()
             }
             else
             {
+                // FIXME: Sometimes, when I2C transmission somehow failed,
+                // This is repeatedly shown.
+                // TODO: Recover Bus state!
                 display.showError("Err Temp");
                 status.invalidTempReading();
             }
