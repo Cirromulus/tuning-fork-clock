@@ -13,6 +13,7 @@
 struct LoggerConfig
 {
     bool period = true;
+    bool periodExternal = true;
     bool bmeData = true;
     bool estimations = true;
     bool humanReadables = false;
@@ -30,6 +31,7 @@ public:
     }
 
     void addDataPoint(const OscCount& period_counts,    // unit is "reference counts"
+                      const std::optional<OscCount> periodExternal_counts,
                       const uint64_t& estimatedTime_us,
                       const double& estimatedForkTemp_deg,
                       const int64_t& estimatedDrift_us,
@@ -39,6 +41,10 @@ public:
         if (mConfig.period)
         {
             printf("%lu", period_counts);
+        }
+        if (mConfig.periodExternal)
+        {
+            printf(",%lu", periodExternal_counts.value_or(0));
         }
         if (mConfig.bmeData)
         {
@@ -80,7 +86,9 @@ private:
     emitHeader() const
     {
         if (mConfig.period)
-            printf ("Period duration [us / %lu]", config::periodsPerMeasurement);
+            printf ("Period duration (internal) [us / %lu]", config::periodsPerMeasurement);
+        if (mConfig.periodExternal)
+            printf ("Period duration (external) [us / %lu]", config::periodsPerMeasurement);
         if (mConfig.bmeData)
             printf (", Temperature [0.01 DegC], Pressure [2^(-8) Pa], Humidity [2^(-10) %RH]");
         if (mConfig.estimations)

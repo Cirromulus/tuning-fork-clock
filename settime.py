@@ -37,4 +37,5 @@ while True:
     if ret:
         print ("<-- ", ret)
         if 'OK' in ret:
+            # TODO: Check returned timestamp for equivalence
             break

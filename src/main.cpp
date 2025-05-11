@@ -40,6 +40,12 @@ fork_osc_callback(uint gpio, uint32_t events);
 
 // --------------
 
+struct ForkMeasurement
+{
+    OscCount internalReference;
+    std::optional<OscCount> externalReference;
+};
+
 // ugh, globals
 queue_t period_fifo;
 
@@ -94,7 +100,7 @@ main()
     }
 
 
-    queue_init(&period_fifo, sizeof(OscCount), config::fifoSize);
+    queue_init(&period_fifo, sizeof(ForkMeasurement), config::fifoSize);
     gpio_init(config::forkWatchPin);
     gpio_set_pulls(config::forkWatchPin, false, true);    // "Weak" pulldown
     gpio_set_irq_enabled_with_callback(config::forkWatchPin, GPIO_IRQ_EDGE_RISE, true, &fork_osc_callback);
@@ -120,8 +126,8 @@ main()
     while(true)
     {
         // Get new fork osc count from counter ITR
-        OscCount oscCount = 0;
-        if (!queue_try_remove(&period_fifo, &oscCount))
+        ForkMeasurement forkMeasurement;
+        if (!queue_try_remove(&period_fifo, &forkMeasurement))
         {
             // There is no new oscCount to get
             const auto diff = absolute_time_diff_us(lastValidForkSampleTime, get_absolute_time());
@@ -148,7 +154,8 @@ main()
         }
 
         // Set status "default", will be overwritten later if something errorred
-        status.expectedFrequency();
+        status.expectedFrequency(forkMeasurement.externalReference.has_value());
+
 
         if (shouldSampleEnvironment)
         {
@@ -167,19 +174,20 @@ main()
         }
 
         // Handling sanity of measured values
-        if (oscCount > config::expectedMaxCount)
+        // This is based on internal reference, because precision is not important
+        if (forkMeasurement.internalReference > config::expectedMaxCount)
         {
             display.showError("fTooLow");
             status.tooLowFrequency();
             continue;
         }
-        if (oscCount < config::expectedMinCount)
+        else if (forkMeasurement.internalReference < config::expectedMinCount)
         {
             display.showError("fTooHigh");
             status.tooHighFrequency();
             continue;
         }
-        if (!lastEnvironmentSample)
+        else if (!lastEnvironmentSample)
         {
             // we never had a valid reading
             status.invalidTempReading();
@@ -194,7 +202,9 @@ main()
             // ------ The Interesting Thing ------
             const auto delta = timeEstimator.consumeNextMeasurement(lastEnvironmentSample->temperature_centidegree);
             time.increaseDelta_us(delta);
-            const auto currentDriftSinceBoot_us = clocksource::Internal::getTimeSinceReferenceStable_us() - time.getElapsedTimeSinceBoot_us();
+            const auto currentDriftSinceBoot_us =
+                externalClockSource.getTimeSinceReferenceStable_us().value_or(clocksource::Internal::getTimeSinceReferenceStable_us())
+                    - time.getElapsedTimeSinceBoot_us();
             // -----------------------------------
 
 
@@ -219,7 +229,8 @@ main()
             // ------------------------------------
 
             // ----- emit measurements to log -----
-            logger.addDataPoint(oscCount,
+            logger.addDataPoint(forkMeasurement.internalReference,
+                                forkMeasurement.externalReference,
                                 time.getElapsedTimeSinceBoot_us(),
                                 timeEstimator.getEstimatedForkTemperature(),
                                 currentDriftSinceBoot_us,
@@ -236,40 +247,33 @@ void fork_osc_callback(uint gpio, uint32_t events)
     // Hot cycle:
     // The more repeatable this counts, the better phase variance gets
     static size_t currentCycle = 0;
-    static AbsTime cycleStartTime = 0;
-
+    static AbsTime cycleStartTime_internal = 0;
+    static std::optional<AbsTime> cycleStartTime_external = 0;
     if (currentCycle >= config::periodsPerMeasurement)
     {
-        static bool useExternalClock = true;
-        std::optional<AbsTime> now = std::nullopt;
-        if (useExternalClock)
-        {
-            now = externalReferenceClock->getCurrentReferenceTicks();
-            if (!now)
-            {
-                useExternalClock = false;
-                // Timing is broken anyway. Print is OK.
-                printf("WARN: Could not get external reference clock value.\n");
-                printf("WARN: This is now deactivated forever (until reboot)!\n");
-                now = clocksource::Internal::getCurrentReferenceTicks();
-            }
-        }
-        else
-        {
-            now = clocksource::Internal::getCurrentReferenceTicks();
-        }
+        const AbsTime now_internal = clocksource::Internal::getCurrentReferenceTicks();
+        const std::optional<AbsTime> now_external = externalReferenceClock->getCurrentReferenceTicks();
 
-        clocksource::Internal::getCurrentReferenceTicks();
-        const DiffTime diff = *now - cycleStartTime;
-        cycleStartTime = *now;
-        currentCycle = 0;
-        if (!queue_try_add(&period_fifo, &diff))
+        ForkMeasurement newMeasurement;
+        newMeasurement.internalReference = now_internal - cycleStartTime_internal;
+        // I don't know whether this is actually readable or not... if both have value, then do difference.
+        newMeasurement.externalReference = now_external.and_then(
+                [](const AbsTime& now){
+                     return cycleStartTime_external.transform(
+                        [&now](const AbsTime& startTime){ return static_cast<DiffTime>(now - startTime);}
+                    );
+                });
+        if (!queue_try_add(&period_fifo, &newMeasurement))
         {
             // this happens if we can't consume the counts
             // in the main estimate & display loop
             // Should not happen. Especially not regularly.
             printf("FIFO was full\n");
         };
+
+        cycleStartTime_internal = now_internal;
+        cycleStartTime_external = now_external;
+        currentCycle = 0;
     }
     else
     {

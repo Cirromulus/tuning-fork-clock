@@ -93,20 +93,26 @@ public:
     std::optional<AbsTime>
     getCurrentReferenceTicks() const
     {
+        // flush rx fifo in case there was a timeout
+        while (!pio_sm_is_rx_fifo_empty(pio, sm))
+        {
+            // discard possibly old values
+            pio_sm_get(pio, sm);
+        }
         // If we don't already have something inside...
+        // This may happen if we time-outed from last read (and still will timeout)
         if (pio_sm_is_tx_fifo_empty(pio, sm))
         {
             pio_sm_put(pio, sm, 1);     // any non-zero value is considered a request
         }
 
-        // this is the internal, possibly drifting, MCU time.
-        // Only used for timeout.
-        static constexpr unsigned maxCyclesToWait = 2;
+        static constexpr unsigned maxCyclesToWait = 1;  // We have two response slots per cycle.
         static constexpr uint32_t maxTimePerCycle_us = maxCyclesToWait * (referenceClockFrequency / 1'000'000);
+        // this is the internal, possibly drifting, MCU time. Only used for timeout.
         const auto whenToTimeout = make_timeout_time_us(maxTimePerCycle_us);
 
         std::optional<AbsTime> counterLow;
-        while(absolute_time_diff_us(get_absolute_time(), whenToTimeout) > 0)
+        do  // at least once.
         {
             if (!pio_sm_is_rx_fifo_empty(pio, sm))
             {
@@ -114,7 +120,12 @@ public:
                 break;
             }
         }
-        return counterLow.transform([](const AbsTime& value) {return value | static_cast<AbsTime>(counterHigh) << 32 ;});
+        while(absolute_time_diff_us(get_absolute_time(), whenToTimeout) > 0);
+
+        return counterLow.transform(
+                [](const AbsTime& value) {
+                    return value | static_cast<AbsTime>(counterHigh) << 32;
+                });
     }
 
     std::optional<AbsTime>

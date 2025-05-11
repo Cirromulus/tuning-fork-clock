@@ -48,9 +48,9 @@ public:
     }
 
     void
-    expectedFrequency()
+    expectedFrequency(bool hasExternalOscillator)
     {
-        led.put_pixel(0, brightness, 0);
+        led.put_pixel(hasExternalOscillator ? 0 : brightness / 3, brightness, 0);
     }
 
     void
