@@ -35,7 +35,7 @@ try:
             print (f"Got nothing. Is there a OSC LOCK?")
             continue
 
-        if len(elements) < len(data.TABLE_FORMAT):
+        if len(elements) != len(data.TABLE_FORMAT):
             print (f"'{line}' is not of the expected format: Got {len(elements)} elements instead of {len(data.TABLE_FORMAT)}")
             continue
 

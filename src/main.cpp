@@ -174,8 +174,9 @@ main()
                 // FIXME: Sometimes, when I2C transmission somehow failed,
                 // This is repeatedly shown.
                 // TODO: Recover Bus state!
-                display.showError("Err Temp");
                 status.invalidTempReading();
+                display.showError("Err Temp");
+                sleep_ms(100);    // showError's end_wait_us does not seem to have an effect?
             }
         }
 
@@ -240,6 +241,7 @@ main()
             // ----- emit measurements to log -----
             logger.addDataPoint(forkMeasurement.internalReference,
                                 forkMeasurement.externalReference,
+                                delta,
                                 time.getElapsedTimeSinceBoot_us(),
                                 timeEstimator.getEstimatedForkTemperature(),
                                 currentDriftSinceBoot_us,

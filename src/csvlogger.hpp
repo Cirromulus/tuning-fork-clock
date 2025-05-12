@@ -32,6 +32,7 @@ public:
 
     void addDataPoint(const OscCount& period_counts,    // unit is "reference counts"
                       const std::optional<OscCount> periodExternal_counts,
+                      const OscCount& estimatedPeriod,
                       const uint64_t& estimatedTime_us,
                       const double& estimatedForkTemp_deg,
                       const int64_t& estimatedDrift_us,
@@ -55,8 +56,7 @@ public:
         }
         if (mConfig.estimations)
         {
-            printf(",%lld,%f", estimatedTime_us, estimatedForkTemp_deg);
-
+            printf(",%lu,%llu,%f", estimatedPeriod, estimatedTime_us, estimatedForkTemp_deg);
         }
         if (mConfig.humanReadables)
         {
@@ -92,7 +92,12 @@ private:
         if (mConfig.bmeData)
             printf (", Temperature [0.01 DegC], Pressure [2^(-8) Pa], Humidity [2^(-10) %RH]");
         if (mConfig.estimations)
-            printf (", Estimated elapsed time [us], Current Fork Temperature Estimation [0.01 DegC], Current Period Estimation [us]");
+        {
+            printf (", Estimated Period duration [us / %lu]", config::periodsPerMeasurement);
+            printf (", Estimated elapsed time [us]"
+                    ", Current Fork Temperature Estimation [0.01 DegC]"
+                    ", Current Period Estimation [us]");
+        }
         if (mConfig.humanReadables)
             printf (", Current Frequency [Hz], Temperature [DegC], Pressure [Pa], Humidity [%RH]");
         if (mConfig.differenceToInternal)

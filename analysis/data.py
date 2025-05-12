@@ -28,6 +28,7 @@ TABLE_FORMAT = {
     'temperature': ColDesc('Temperature', 'INTEGER', 'Degree Celsius', 0.01),
     'pressure': ColDesc('Pressure', 'INTEGER', 'Pa', pow(2,-8)),
     'humidity': ColDesc('Humidity', 'INTEGER', '%RH', pow(2,-10)),
+    'period_estimate': ColDesc('PeriodEst', 'INTEGER', 'us', expected_frequency),
     'est_time': ColDesc('EstimatedTime', 'INTEGER', 'us', 1),
     'est_fork_temp' : ColDesc('EstimatedForkTemp', 'INTEGER', 'Degree Celsius', 0.01),
     # Human Readables: Currently deactivated
