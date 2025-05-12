@@ -24,7 +24,7 @@ PRINT_EVERY = timedelta(seconds=2)
 lastprint = datetime.fromtimestamp(0)
 
 print (f"Writing into '{db_file_name}'")
-
+first_estimate_diff = None
 try:
     while (device.is_open):
         line = device.readline().decode(stringcode).rstrip()
@@ -49,7 +49,10 @@ try:
         if datetime.now() > lastprint + PRINT_EVERY:
             numrows = db_con.execute(f"SELECT COUNT(1) from {data.TABLE_NAME}").fetchone()[0]
             print (f"\rCurrently collected {numrows} samples.", end=' ')
-            print (f" Current estimate diff: {elements[-1]} us", end=' ')
+            currentReportedDrift = int(elements[-1]) # Todo: get named parameter and offset
+            if not first_estimate_diff:
+                first_estimate_diff = currentReportedDrift
+            print (f" Current estimate diff: {currentReportedDrift} us ({first_estimate_diff - currentReportedDrift} since start of log)", end=' ')
             db.commit()  # Also, commit while we are at it
             lastprint = datetime.now()
 except KeyboardInterrupt:

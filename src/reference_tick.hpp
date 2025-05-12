@@ -9,6 +9,7 @@
 #include <pulsecounter.pio.h>
 #include <pico/time.h>  // Only used for timeout
 
+#include <atomic>
 #include <optional>
 
 namespace clocksource
@@ -30,18 +31,21 @@ getTimeSinceReferenceStable_us();
 template <unsigned inputPinNr, AbsTime referenceClockFrequency>
 struct External
 {
-    PIO pio;
-    uint sm;
-    uint offset;
-    int dmaChannel;
-
     // This is static, so for the same pin we can't have different counters callbacks.
     // ... which seems sensible
-    static uint32_t counterHigh;
+
+    static inline PIO pio;
+    static inline uint sm;
+    static inline uint offset;
+    static constexpr uint counterWrapPioItr = 0;
+    static inline std::atomic<uint32_t> counterHigh;
+
+    using PioRegisterWidth = uint32_t;
 
     static void
     counterHasWrapped()
     {
+        pio_interrupt_clear(pio, counterWrapPioItr) ;
         counterHigh++;
     }
 
@@ -58,7 +62,7 @@ public:
         }
 
         // Find a free irq
-        int pio_irq = pio_get_irq_num(pio, 0);
+        int pio_irq = pio_get_irq_num(pio, counterWrapPioItr);
         if (irq_get_exclusive_handler(pio_irq)) {
             pio_irq++;
             if (irq_get_exclusive_handler(pio_irq)) {
@@ -66,7 +70,7 @@ public:
             }
         }
 
-        irq_add_shared_handler(pio_irq, &External::counterHasWrapped, PICO_SHARED_IRQ_HANDLER_DEFAULT_ORDER_PRIORITY); // Add a shared IRQ handler
+        irq_set_exclusive_handler(pio_irq, &External::counterHasWrapped);
         irq_set_enabled(pio_irq, true); // Enable the IRQ
         const uint irq_index = pio_irq - pio_get_irq_num(pio, 0); // Get index of the IRQ
         pio_set_irqn_source_enabled(pio, irq_index, pio_interrupt_source::pis_interrupt0, true);
@@ -79,6 +83,7 @@ public:
     std::optional<uint32_t>
     lookIntoStateMachine()
     {
+        printf("CounterHigh is %lu\n", counterHigh.load());
         printf("Fifo level TX: %u, RX: %u\n",
                 pio_sm_get_tx_fifo_level(pio, sm),
                 pio_sm_get_rx_fifo_level(pio, sm));
@@ -106,12 +111,12 @@ public:
             pio_sm_put(pio, sm, 1);     // any non-zero value is considered a request
         }
 
-        static constexpr unsigned maxCyclesToWait = 1;  // We have two response slots per cycle.
-        static constexpr uint32_t maxTimePerCycle_us = maxCyclesToWait * (referenceClockFrequency / 1'000'000);
+        static constexpr unsigned maxCyclesToWait = 1;  // We have two response slots per cycle
+        static constexpr AbsTime maxTimePerCycle_us = maxCyclesToWait * (referenceClockFrequency / 1'000'000);
         // this is the internal, possibly drifting, MCU time. Only used for timeout.
         const auto whenToTimeout = make_timeout_time_us(maxTimePerCycle_us);
 
-        std::optional<AbsTime> counterLow;
+        std::optional<PioRegisterWidth> counterLow;
         do  // at least once.
         {
             if (!pio_sm_is_rx_fifo_empty(pio, sm))
@@ -122,10 +127,11 @@ public:
         }
         while(absolute_time_diff_us(get_absolute_time(), whenToTimeout) > 0);
 
-        return counterLow.transform(
-                [](const AbsTime& value) {
-                    return value | static_cast<AbsTime>(counterHigh) << 32;
-                });
+        if (counterLow.has_value())
+        {
+            return *counterLow | (static_cast<AbsTime>(counterHigh) << (sizeof(PioRegisterWidth) * 8));
+        }
+        return std::nullopt;
     }
 
     std::optional<AbsTime>
@@ -137,10 +143,5 @@ public:
         return getCurrentReferenceTicks().transform([](const AbsTime& val){ return val / multiplicator; });
     }
 };
-
-// I hope that this does not lead to multiple different counters...
-template <unsigned inputPinNr, AbsTime referenceClockFrequency>
-uint32_t External<inputPinNr, referenceClockFrequency>::counterHigh = 0;
-
 
 } // namespace clocksource

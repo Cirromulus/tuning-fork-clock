@@ -23,7 +23,7 @@ static constexpr unsigned forkWatchPin = 29;
 
 static constexpr unsigned referenceClockPin = 9;
 
-static constexpr AbsTime referenceClockFrequency = 1'000'000;  // us per count
+static constexpr AbsTime referenceClockFrequency = 1'000'000;  // counts per second
 
 // should be big enough for allowing I2C measuring traffic.
 // This is translatable via `fifoSize * periodsPerMeasurement / expectedOscFreq`
