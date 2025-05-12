@@ -70,6 +70,8 @@ public:
             }
         }
 
+        // TODO: If we want to have multiple IRQ handlers for our PIO,
+        // This would need to be changed to .._shared_.. and the ITR handler needs to check the source.
         irq_set_exclusive_handler(pio_irq, &External::counterHasWrapped);
         irq_set_enabled(pio_irq, true); // Enable the IRQ
         const uint irq_index = pio_irq - pio_get_irq_num(pio, 0); // Get index of the IRQ
@@ -137,10 +139,34 @@ public:
     std::optional<AbsTime>
     getTimeSinceReferenceStable_us() const
     {
-        static constexpr AbsTime multiplicator = referenceClockFrequency / 1'000'000;
-        static_assert (multiplicator * 1'000'000 == referenceClockFrequency,
-                        "ReferenceClock not divisible by microseconds without loss");
-        return getCurrentReferenceTicks().transform([](const AbsTime& val){ return val / multiplicator; });
+        static constexpr AbsTime us_per_s = 1'000'000;
+        static constexpr AbsTime frequency_Mhz = referenceClockFrequency / us_per_s;
+        static constexpr AbsTime us_per_tick = us_per_s / referenceClockFrequency;
+        // Frequency is >= 1 Mhz, and we can divide without loss.
+        static constexpr bool canDivideWithoutLoss = frequency_Mhz * us_per_s == referenceClockFrequency;
+        // Frequency is < 1Mhz, and we can multiply without loss.
+        static constexpr bool canMultiplyWithoutLoss = us_per_tick * referenceClockFrequency == us_per_s;
+
+        const auto now_ticks = getCurrentReferenceTicks();
+        if (!now_ticks)
+        {
+            return std::nullopt;
+        }
+        if constexpr (canDivideWithoutLoss)
+        {
+            return *now_ticks / frequency_Mhz;
+        }
+        else if constexpr (canMultiplyWithoutLoss)
+        {
+            return *now_ticks * us_per_tick;
+        }
+        else
+        {
+            // comment out and return a double, if you have a problem with that
+            static_assert (canDivideWithoutLoss || canMultiplyWithoutLoss,
+                            "ReferenceClock not divisible by microseconds without loss");
+        }
+
     }
 };
 
