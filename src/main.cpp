@@ -175,8 +175,8 @@ main()
                 // This is repeatedly shown.
                 // TODO: Recover Bus state!
                 status.invalidTempReading();
-                display.showError("Err Temp");
                 recoverTempI2c();
+                display.showError("Err Temp");
             }
         }
 
