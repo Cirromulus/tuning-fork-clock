@@ -107,7 +107,7 @@ public:
   static constexpr Brightness maxBrightness = 7;
   static constexpr size_t num_characters = 8;
 
-  constexpr HDSP21XX(const HDSP21XXPins& pinSetup, Mcp23017& expander)
+  HDSP21XX(const HDSP21XXPins& pinSetup, Mcp23017& expander)
   : mPinSetup{pinSetup}, mcp{expander}
   {
     mcp.set_io_direction(0);

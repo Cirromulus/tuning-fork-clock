@@ -1,5 +1,7 @@
 #pragma once
 
+#include <hardware/i2c.h>   // for I2cConfig
+
 #include <stddef.h>
 #include <inttypes.h>
 #include <limits>
@@ -15,13 +17,22 @@ using AbsTime = uint64_t;
 // used for drift etc
 using DiffTime = int64_t;
 
+struct I2cConfig
+{
+    unsigned sda;
+    unsigned scl;
+    i2c_inst_t* i2c_inst;
+    uint32_t desiredBaudrate = 300'000;
+};
+
 namespace config
 {
 
 // Near "GND" for less cable tangling
 static constexpr unsigned forkWatchPin = 29;
-
 static constexpr unsigned referenceClockPin = 9;
+static constexpr I2cConfig bme280 {.sda = 26, .scl = 27, .i2c_inst = i2c1};
+static constexpr I2cConfig mcp {.sda = 4, .scl = 5, .i2c_inst = i2c0};
 
 static constexpr AbsTime referenceClockFrequency = 1'000'000;  // counts per second
 

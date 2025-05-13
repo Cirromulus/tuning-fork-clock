@@ -12,6 +12,9 @@ i2c_inst_t* setupTempI2c();
 i2c_inst_t* setupMcpI2c();
 
 void
+recoverTempI2c();
+
+void
 busScan(i2c_inst_t* ic2_device);
 
 // stoopid offsets for mcp to easier remember

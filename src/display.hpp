@@ -26,7 +26,6 @@ class ClockDisplay
 
 public:
 
-    constexpr
     ClockDisplay(Mcp23017& expander, HDSP21XXPins const& pinSetup) :
     mDriver{pinSetup, expander}
     {

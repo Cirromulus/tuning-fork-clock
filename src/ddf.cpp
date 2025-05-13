@@ -1,49 +1,74 @@
 
 #include "ddf.hpp"
+#include <include/config.hpp>
 #include <pico/stdlib.h>
 #include <pico/binary_info.h>   // for picotool help
 
 #include <stdio.h>
 
-uint
-setupI2C(i2c_inst_t* ic2, unsigned sda, unsigned scl, uint baudrate = 400 * 1000)
+template <unsigned sdaPin, unsigned sclPin, uint32_t frequency = 100'000>
+void i2cBusClear()
 {
-    const uint actualBaudrate = i2c_init(ic2, baudrate);
-    gpio_set_function(sda, GPIO_FUNC_I2C);
-    gpio_set_function(scl, GPIO_FUNC_I2C);
-    gpio_pull_up(sda);
-    gpio_pull_up(scl);
-    if (actualBaudrate != baudrate)
+    static constexpr uint32_t us_per_symbol = 1'000'000 / frequency;
+    gpio_init(sdaPin);
+    gpio_set_dir(sdaPin, GPIO_OUT);
+    gpio_init(sclPin);
+    gpio_set_dir(sclPin, GPIO_OUT);
+    gpio_put(sdaPin, true);
+    // clock some zeros
+    for (unsigned i = 0; i < 16; i++)
     {
-        printf("i2c_init failed to reach baudrate of %u, got instead %u\n", baudrate, actualBaudrate);
+        gpio_put(sclPin, false);
+        sleep_us(us_per_symbol);
+        gpio_put(sclPin, true);
+        sleep_us(us_per_symbol);
+    }
+    // do stop condition
+    gpio_put(sclPin, false);
+    sleep_us(us_per_symbol);
+    gpio_put(sdaPin, true);
+    sleep_us(us_per_symbol);
+    gpio_put(sclPin, true);
+}
+
+uint
+setupI2C(const I2cConfig& config)
+{
+    const uint actualBaudrate = i2c_init(config.i2c_inst, config.desiredBaudrate);
+    gpio_set_function(config.sda, GPIO_FUNC_I2C);
+    gpio_set_function(config.scl, GPIO_FUNC_I2C);
+    gpio_pull_up(config.sda);
+    gpio_pull_up(config.scl);
+    if (actualBaudrate != config.desiredBaudrate)
+    {
+        printf("i2c_init failed to reach baudrate of %u, got instead %u\n",
+               config.desiredBaudrate, actualBaudrate);
     }
 
     // announce to picotool.
     // Not mandatory, just nice to have.
-    bi_decl(bi_2pins_with_func(sda, scl, GPIO_FUNC_I2C));
+    bi_decl(bi_2pins_with_func(config.sda, config.scl, GPIO_FUNC_I2C));
     return actualBaudrate;
 }
 
 i2c_inst_t* setupTempI2c()
 {
-    // BME280 is on I2C1 GP26/27
-    static constexpr unsigned sht20_sda = 26;
-    static constexpr unsigned sht20_scl = 27;
+    setupI2C(config::bme280);
+    return config::bme280.i2c_inst;
+}
 
-    setupI2C(i2c1, sht20_sda, sht20_scl);
-    return i2c1;
+void
+recoverTempI2c()
+{
+    i2cBusClear<config::bme280.sda, config::bme280.scl>();
+    setupI2C(config::bme280);
 }
 
 i2c_inst_t* setupMcpI2c()
 {
-    static constexpr unsigned mcp_sda = 4;
-    static constexpr unsigned mcp_scl = 5;
-
-    // worked with 100kHz. Increase if more is needed.
-    setupI2C(i2c0, mcp_sda, mcp_scl, 100 * 1000);
-    return i2c0;
+    setupI2C(config::mcp);
+    return config::mcp.i2c_inst;
 }
-
 
 void busScan(i2c_inst_t* ic2_device)
 {

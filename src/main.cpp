@@ -176,6 +176,7 @@ main()
                 // TODO: Recover Bus state!
                 status.invalidTempReading();
                 display.showError("Err Temp");
+                recoverTempI2c();
             }
         }
 

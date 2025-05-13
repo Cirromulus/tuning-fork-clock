@@ -93,7 +93,7 @@ public:
     std::optional<int32_t>
     readTemperature()
     {
-        return readTemperatureRaw().and_then(filterDefaultRegisterValue<>).transform([this](auto reg){ return calibratedTemperature(reg);});
+        return readTemperatureRaw().and_then(filterDefaultRegisterValue<>).transform([this](const auto& reg){ return calibratedTemperature(reg);});
     }
 
     // Returns pressure in Pa as unsigned 32 bit integer in Q24.8 format
@@ -103,7 +103,7 @@ public:
     readPressure()
     {
         // you should have read Temperature as well, hm
-        return readPressureRaw().and_then(filterDefaultRegisterValue<>).transform([this](auto reg){ return calibratedPressure(reg);});
+        return readPressureRaw().and_then(filterDefaultRegisterValue<>).transform([this](const auto& reg){ return calibratedPressure(reg);});
     }
 
     // Returns humidity in %RH as unsigned 32 bit integer in Q22.10 format
@@ -113,7 +113,7 @@ public:
     readHumidity()
     {
         // you should have read Temperature as well, hm
-        return readHumidityRaw().and_then(filterDefaultRegisterValue<0x8000>).transform([this](auto reg){ return calibratedHumidity(reg);});
+        return readHumidityRaw().and_then(filterDefaultRegisterValue<0x8000>).transform([this](const auto& reg){ return calibratedHumidity(reg);});
     }
 
     // This is the suggested way of reading it, as the tempco data will be fresh
