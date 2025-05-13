@@ -176,7 +176,6 @@ main()
                 // TODO: Recover Bus state!
                 status.invalidTempReading();
                 display.showError("Err Temp");
-                sleep_ms(100);    // showError's end_wait_us does not seem to have an effect?
             }
         }
 

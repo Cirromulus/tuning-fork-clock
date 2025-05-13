@@ -215,11 +215,6 @@ public:
       else
       {
         write_string_oneshot(str, {.blink = options.blink});
-        if (str.size() <= num_characters)
-        {
-          // why even bother?
-          return;
-        }
         sleep_us(options.initial_wait_us);
       }
 
