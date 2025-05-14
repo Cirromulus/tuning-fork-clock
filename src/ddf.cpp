@@ -6,29 +6,29 @@
 
 #include <stdio.h>
 
-template <unsigned sdaPin, unsigned sclPin, uint32_t frequency = 100'000>
+template <unsigned sdaPin, unsigned sclPin, uint32_t frequency = 10'000>
 void i2cBusClear()
 {
     static constexpr uint32_t us_per_symbol = 1'000'000 / frequency;
     gpio_init(sdaPin);
     gpio_set_dir(sdaPin, GPIO_OUT);
+    gpio_put(sdaPin, true);
     gpio_init(sclPin);
     gpio_set_dir(sclPin, GPIO_OUT);
-    gpio_put(sdaPin, true);
     // clock some zeros
-    for (unsigned i = 0; i < 16; i++)
+    for (unsigned i = 0; i <= 16; i++)
     {
         gpio_put(sclPin, false);
-        sleep_us(us_per_symbol);
+        sleep_us(us_per_symbol / 2);
         gpio_put(sclPin, true);
-        sleep_us(us_per_symbol);
+        sleep_us(us_per_symbol / 2);
     }
-    // do stop condition
-    gpio_put(sclPin, false);
-    sleep_us(us_per_symbol);
-    gpio_put(sdaPin, true);
-    sleep_us(us_per_symbol);
-    gpio_put(sclPin, true);
+    // do stop condition ?
+    // gpio_put(sclPin, false);
+    // sleep_us(us_per_symbol);
+    // gpio_put(sdaPin, true);
+    // sleep_us(us_per_symbol);
+    // gpio_put(sclPin, true);
 }
 
 uint
@@ -60,7 +60,7 @@ i2c_inst_t* setupTempI2c()
 void
 recoverTempI2c()
 {
-    i2cBusClear<config::bme280.sda, config::bme280.scl>();
+    i2cBusClear<config::bme280.sda, config::bme280.scl, 50'000>();
     setupI2C(config::bme280);
 }
 

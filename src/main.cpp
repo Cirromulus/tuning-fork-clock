@@ -113,7 +113,7 @@ main()
     static constexpr size_t printHeaderEveryNLines = 60 * (config::periodsPerMeasurement / config::expectedOscFreq);
 
     // Used for temperature sensing
-    std::optional<BME280::EnvironmentMeasurement> lastEnvironmentSample = bme.readEnvironment();
+    std::expected<BME280::EnvironmentMeasurement, std::string_view> lastEnvironmentSample = bme.readEnvironment();
     // Used for detection of "no fork signal"
     absolute_time_t lastValidForkSampleTime = get_absolute_time();
 
@@ -166,17 +166,21 @@ main()
             const auto maybeCurrentEnv = bme.readEnvironment();
             if (maybeCurrentEnv)
             {
-                lastEnvironmentSample = *maybeCurrentEnv;
+                lastEnvironmentSample = maybeCurrentEnv;
                 shouldSampleEnvironment = false;
             }
             else
             {
                 // FIXME: Sometimes, when I2C transmission somehow failed,
                 // This is repeatedly shown.
-                // TODO: Recover Bus state!
+                printf("Temp: %.*s\n",
+                    static_cast<int>(maybeCurrentEnv.error().length()),
+                    maybeCurrentEnv.error().data());
                 status.invalidTempReading();
-                recoverTempI2c();
+                recoverTempI2c();   // does not seem to help
                 display.showError("Err Temp");
+                display.showError(maybeCurrentEnv.error());
+                printf("Tried to recover I2c bus.\n");
             }
         }
 
@@ -202,6 +206,10 @@ main()
             // we never had a valid reading
             status.invalidTempReading();
             display.showError("No Temp Yet");
+            display.showError(lastEnvironmentSample.error());
+            printf("Temp: %.*s\n",
+                    static_cast<int>(lastEnvironmentSample.error().length()),
+                    lastEnvironmentSample.error().data());
             continue;
         }
 

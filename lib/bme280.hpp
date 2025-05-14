@@ -5,7 +5,8 @@
 #include <hardware/i2c.h>
 
 #include <array>
-#include <optional>
+#include <expected>
+#include <string_view>
 
 // // FIXME DEBUg
 // #include <cstdio>
@@ -70,19 +71,19 @@ public:
         return startSampling();
     }
 
-    std::optional<uint32_t>
+    std::expected<uint32_t, std::string_view>
     readTemperatureRaw()
     {
         return readRegThree(BME280_REGISTER_TEMPDATA);
     }
 
-    std::optional<uint32_t>
+    std::expected<uint32_t, std::string_view>
     readPressureRaw()
     {
         return readRegThree(BME280_REGISTER_PRESSUREDATA);
     }
 
-    std::optional<uint16_t>
+    std::expected<uint16_t, std::string_view>
     readHumidityRaw()
     {
         return readReg<uint16_t>(BME280_REGISTER_HUMIDDATA);
@@ -90,7 +91,7 @@ public:
 
     // Returns temperature in DegC, resolution is 0.01 DegC.
     // E.g.: Output value of "5123" equals 51.23 DegC.
-    std::optional<int32_t>
+    std::expected<int32_t, std::string_view>
     readTemperature()
     {
         return readTemperatureRaw().and_then(filterDefaultRegisterValue<>).transform([this](const auto& reg){ return calibratedTemperature(reg);});
@@ -99,7 +100,7 @@ public:
     // Returns pressure in Pa as unsigned 32 bit integer in Q24.8 format
     // (24 integer bits and 8 fractional bits).
     // Output value of “24674867” represents 24674867/256 = 96386.2 Pa = 963.862 hPa
-    std::optional<uint32_t>
+    std::expected<uint32_t, std::string_view>
     readPressure()
     {
         // you should have read Temperature as well, hm
@@ -109,7 +110,7 @@ public:
     // Returns humidity in %RH as unsigned 32 bit integer in Q22.10 format
     // (22 integer and 10 fractional bits).
     // Output value of “47445” represents 47445/1024 = 46.333 %RH
-    std::optional<uint32_t>
+    std::expected<uint32_t, std::string_view>
     readHumidity()
     {
         // you should have read Temperature as well, hm
@@ -117,7 +118,7 @@ public:
     }
 
     // This is the suggested way of reading it, as the tempco data will be fresh
-    std::optional<EnvironmentMeasurement>
+    std::expected<EnvironmentMeasurement, std::string_view>
     readEnvironment()
     {
         const auto maybeTemp = readTemperature();
@@ -126,7 +127,7 @@ public:
 
         if (maybeTemp && maybePres && maybeHumi)
             return EnvironmentMeasurement{*maybeTemp, *maybePres, *maybeHumi};
-        return std::nullopt;
+        return std::unexpected(!maybeTemp ? maybeTemp.error() : (!maybePres ? maybePres.error() : (!maybeHumi ? maybeHumi.error() : "lol")));
     }
 
 private:
@@ -199,12 +200,12 @@ private:
 
     template <uint32_t defaultValue = 0x800000>
     static constexpr
-    std::optional<uint32_t>
+    std::expected<uint32_t, std::string_view>
     filterDefaultRegisterValue(uint32_t registerValue)
     {
         if (registerValue == defaultValue)
         {
-            return std::nullopt;
+            return std::unexpected("got default value");
         }
         return registerValue;
     }
@@ -307,29 +308,45 @@ private:
         return comb;
     }
 
+    static constexpr
+    std::string_view
+    i2cValueToError(int val)
+    {
+        if (val >= 0)
+            return "Not enough bytes received";
+        if (val == PICO_ERROR_GENERIC)
+            return "address not acknowledged or no device present";
+        if (val == PICO_ERROR_TIMEOUT)
+            return "a timeout occurred";
+        else
+            return "Unknown code";
+    }
+
     template <size_t width = 1>
-    std::optional<std::array<uint8_t, width>>
+    std::expected<std::array<uint8_t, width>, std::string_view>
     readReg(RegAddr addr)
     {
         // "write then read"
 
-        if (i2c_write_blocking_until(m_i2c, deviceAddr, &addr, 1, true, make_timeout_time_ms(timeout_ms)) != 1)
+        const int write = i2c_write_blocking_until(m_i2c, deviceAddr, &addr, 1, true, make_timeout_time_ms(timeout_ms));
+        if (write != 1)
         {
-            return std::nullopt;
+            return std::unexpected(i2cValueToError(write));
         }
 
         std::array<uint8_t, width> buffer = {};
 
-        if (i2c_read_blocking_until(m_i2c, deviceAddr, buffer.begin(), buffer.size(), false, make_timeout_time_ms(timeout_ms)) != width)
+        const int read = i2c_read_blocking_until(m_i2c, deviceAddr, buffer.begin(), buffer.size(), false, make_timeout_time_ms(timeout_ms));
+        if (read != width)
         {
-            return std::nullopt;
+            return std::unexpected(i2cValueToError(read));
         }
 
         return buffer;
     }
 
     template <typename T, bool bigendian = false>
-    std::optional<T>
+    std::expected<T, std::string_view>
     readReg(RegAddr addr)
     {
         return readReg<sizeof(T)>(addr).transform(combineOrder<T, bigendian>);
@@ -337,7 +354,7 @@ private:
 
     // special case
     template <bool bigendian = false>
-    std::optional<uint32_t>
+    std::expected<uint32_t, std::string_view>
     readRegThree(RegAddr addr)
     {
         return readReg<3>(addr).transform(combineOrder<uint32_t, bigendian, 3>);
