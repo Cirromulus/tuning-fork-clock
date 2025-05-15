@@ -89,6 +89,20 @@ namespace hdsp21xx
     bool fade_in = false;   // if active, initial_wait_us is ignored
     bool fade_out = false;  // if active, end_wait_us is ignored
   };
+
+  using CustomCharacter = ::std::array<uint8_t, 7>; // only 5 bit per row!
+  namespace chars
+  {
+    static constexpr CustomCharacter degree {
+        0b00111,
+        0b00101,
+        0b00111,
+        0b00000,
+        0b00000,
+        0b00000,
+        0b00000
+    };
+  }
 }
 
 // This was downgraded to only work for one single display.
@@ -103,6 +117,7 @@ class HDSP21XX
 public:
   using StringOptions = hdsp21xx::StringOptions;
   using RunningTextOptions = hdsp21xx::RunningTextOptions;
+  using CustomCharacter = hdsp21xx::CustomCharacter;
   using Brightness = uint8_t;
   static constexpr Brightness maxBrightness = 7;
   static constexpr size_t num_characters = 8;
@@ -133,6 +148,8 @@ public:
 
   /* blink character at position pos */
   void blink_char(uint8_t pos, bool blink) {
+    // TODO: Internal "is blinking" map, and only send if different
+
     uint8_t col = pos & 0x7;
 
     uint8_t addr = col;
@@ -154,6 +171,30 @@ public:
 
       write_cycle(addr, dta);
       blink_char(pos, blinking);
+  }
+
+  void write_user_char(uint8_t pos, const CustomCharacter& c, bool blinking = false)
+  {
+    // D7 = 0 enables the ASCII decoder and D7 = 1 enables the UDC RAM.
+    // Currently, that mapping is "the position of the target character",
+    // even though that is wasteful if we repeat characters
+    // (and we have double the UDC RAM space than char positions)
+
+    // set current digit to use character ram at the same address.
+    const uint8_t characterAddress = pos;
+    const uint8_t udcAddress = pos;
+
+    // Write the character (maybe again) to udc address
+    write_cycle(0, udcAddress);  // Address is in data
+    for (size_t row = 0; row < c.size(); row++)
+    {
+      write_cycle(0b01000 | row, c[row]);
+    }
+
+    // set the pos character to use the custom character
+    write_cycle(0b11000 | characterAddress, 0b1000'0000 | udcAddress);
+
+    blink_char(pos, blinking);
   }
 
   void

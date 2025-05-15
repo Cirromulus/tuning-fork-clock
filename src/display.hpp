@@ -185,7 +185,7 @@ public:
 
                     // overwrite last char
                     // TODO: Custom char "degree" symbol
-                    mDriver.write_builtin_char(6, '*');
+                    mDriver.write_user_char(6, hdsp21xx::chars::degree);
                     mDriver.write_builtin_char(7, 'C');
                 }
                 else
@@ -267,5 +267,6 @@ private:
     std::optional<float> mTemperature;
 
     std::array<char, HDSP21XX::num_characters> mBuffer;
+
     HDSP21XX mDriver;
 };
