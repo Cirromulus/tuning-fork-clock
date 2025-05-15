@@ -60,7 +60,7 @@ i2c_inst_t* setupTempI2c()
 void
 recoverTempI2c()
 {
-    i2cBusClear<config::bme280.sda, config::bme280.scl, 50'000>();
+    i2cBusClear<config::bme280.sda, config::bme280.scl, config::bme280.desiredBaudrate / 2>();
     setupI2C(config::bme280);
 }
 

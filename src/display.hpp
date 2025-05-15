@@ -16,6 +16,7 @@ class ClockDisplay
         absoluteTime_time,
         absoluteTime_calendar,
         elapsedTimeSinceBoot,
+        temperature,
         drift
     };
 
@@ -65,6 +66,13 @@ public:
     setCurrentDrift_us(const std::optional<DiffTime>& maybeDrift_us)
     {
         mDrift_ms = maybeDrift_us.transform([](const auto& drift_us){return drift_us / 1'000;});
+    }
+
+    constexpr
+    void
+    setTemperature_deg(const std::optional<float> maybeTemp_deg)
+    {
+        mTemperature = maybeTemp_deg;
     }
 
     void
@@ -160,6 +168,33 @@ public:
                 }
             }
             break;
+            case DisplayState::temperature:
+            {
+                const auto [end, code] = std::to_chars(mBuffer.begin(), mBuffer.end(), *mTemperature);
+                if (code == std::errc())    // this is considered a success. meh.
+                {
+                    const std::string_view numberstr{mBuffer.begin(), end};
+                    mDriver.write_string_oneshot(numberstr,
+                                                {.alignment = StringOptions::Alignment::left,
+                                                 .nofill = true});
+                    for (size_t i = numberstr.size(); i < mDriver.num_characters - 2; i++)
+                    {
+                        // manually fill spaces except last element
+                        mDriver.write_builtin_char(i, ' ');
+                    }
+
+                    // overwrite last char
+                    // TODO: Custom char "degree" symbol
+                    mDriver.write_builtin_char(6, '*');
+                    mDriver.write_builtin_char(7, 'C');
+                }
+                else
+                {
+                    showError("TempStr");
+                    printf("String error temp: Could not print %f to screen\n", *mTemperature);
+                }
+            }
+            break;
         }
     }
 
@@ -169,17 +204,26 @@ private:
     getNextTransition() const
     {
         // Currently no fancy state machine.
-        if (mDrift_ms.has_value() && (mElapsedSinceBoot_s % 10 < 2))
+        if (mTemperature.has_value() && (mElapsedSinceBoot_s % 10 < 2))
         {
-            // two seconds of drift from [0, 1]
-            return DisplayState::drift;
+            return DisplayState::temperature;
         }
-        else if (mAbsoluteTime_s)
+
+        if (mDrift_ms.has_value())
+        {
+            const unsigned endSecondToShow = 2 + (mTemperature.has_value() ? 2 : 0);
+            if (mElapsedSinceBoot_s % 10 < endSecondToShow)
+            {
+                return DisplayState::drift;
+            }
+        }
+
+        if (mAbsoluteTime_s)
         {
             if (mElapsedSinceBoot_s % 10 < 8)
-                return DisplayState::absoluteTime_time; // [2, 7]
+                return DisplayState::absoluteTime_time;
             else
-                return DisplayState::absoluteTime_calendar; // [8, 9]
+                return DisplayState::absoluteTime_calendar;
         }
         else
         {
@@ -220,7 +264,8 @@ private:
     std::optional<AbsTime> mAbsoluteTime_s {std::nullopt};
     AbsTime mElapsedSinceBoot_s{0};
 
-    std::array<char, HDSP21XX::num_characters> mBuffer;
+    std::optional<float> mTemperature;
 
+    std::array<char, HDSP21XX::num_characters> mBuffer;
     HDSP21XX mDriver;
 };

@@ -243,6 +243,15 @@ main()
                 // No absolute time, show drift since boot
                 display.setCurrentDrift_us(currentDriftSinceBoot_us);
             }
+
+            if (lastEnvironmentSample)
+            {
+                display.setTemperature_deg(lastEnvironmentSample->getTemperatureDegree());
+            }
+            else
+            {
+                display.setTemperature_deg(std::nullopt);
+            }
             display.update();
             // ------------------------------------
 

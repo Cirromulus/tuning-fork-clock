@@ -5,6 +5,7 @@
 #include <hardware/i2c.h>
 
 #include <array>
+#include <cmath>
 #include <expected>
 #include <string_view>
 
@@ -29,21 +30,21 @@ public:
         uint32_t humidity_q22_10;           // * 2^(-10)
 
         constexpr
-        int32_t getTemperatureDegree() const
+        double getTemperatureDegree() const
         {
             return temperature_centidegree * 0.01;
         }
 
         constexpr
-        uint32_t getPressurePa() const
+        double getPressurePa() const
         {
-            return pressure_q23_8 >> 8;
+            return pressure_q23_8 / static_cast<double>(std::pow(2, 8));
         }
 
         constexpr
-        uint32_t getHumidityPercentRH() const
+        double getHumidityPercentRH() const
         {
-            return humidity_q22_10 >> 10;
+            return humidity_q22_10 / static_cast<double>(std::pow(2, 10));
         }
     };
 
