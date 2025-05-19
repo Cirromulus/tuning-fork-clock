@@ -31,6 +31,14 @@ public:
     mDriver{pinSetup, expander}
     {
         mDriver.set_brightness(dayBrightness);
+        mDegreeChar = mDriver.registerCustomCharacter(hdsp21xx::chars::degree);
+        mHeartL = mDriver.registerCustomCharacter(hdsp21xx::chars::heartL);
+        mHeartR = mDriver.registerCustomCharacter(hdsp21xx::chars::heartR);
+
+        if (!mDegreeChar || !mHeartL || !mHeartR)
+        {
+            showError("Could not register custom chars!");
+        }
     }
 
     void
@@ -185,7 +193,7 @@ public:
 
                     // overwrite last char
                     // TODO: Custom char "degree" symbol
-                    mDriver.write_user_char(6, hdsp21xx::chars::degree);
+                    mDriver.write_user_char(6, mDegreeChar);
                     mDriver.write_builtin_char(7, 'C');
                 }
                 else
@@ -269,4 +277,7 @@ private:
     std::array<char, HDSP21XX::num_characters> mBuffer;
 
     HDSP21XX mDriver;
+    HDSP21XX::CustomCharacterHandle mDegreeChar;
+    HDSP21XX::CustomCharacterHandle mHeartL;
+    HDSP21XX::CustomCharacterHandle mHeartR;
 };

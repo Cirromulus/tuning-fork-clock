@@ -46,6 +46,7 @@
 #include <array>
 #include <optional>
 #include <string_view>
+#include <cmath>
 
 struct HDSP21XXPins
 {
@@ -102,6 +103,26 @@ namespace hdsp21xx
         0b00000,
         0b00000
     };
+
+    static constexpr CustomCharacter heartL {
+        0b01110,
+        0b11101,
+        0b11111,
+        0b01111,
+        0b00111,
+        0b00011,
+        0b00001
+    };
+
+    static constexpr CustomCharacter heartR {
+        0b01110,
+        0b11101,
+        0b11111,
+        0b11110,
+        0b11100,
+        0b11000,
+        0b10000
+    };
   }
 }
 
@@ -114,16 +135,20 @@ class HDSP21XX
   static constexpr Microseconds clearScreenHoldoff = 110 + 100; // extra, for safety! :D
   static constexpr Microseconds dataApply = 1;  // I did not find a value in the datasheet
 
+  static constexpr size_t numUdcCharacters = std::pow(2, 4);
+
+  using UdcCharacterIndex = uint8_t;
+
 public:
   using StringOptions = hdsp21xx::StringOptions;
   using RunningTextOptions = hdsp21xx::RunningTextOptions;
-  using CustomCharacter = hdsp21xx::CustomCharacter;
+  using CustomCharacterHandle = std::optional<UdcCharacterIndex>;
   using Brightness = uint8_t;
   static constexpr Brightness maxBrightness = 7;
   static constexpr size_t num_characters = 8;
 
   HDSP21XX(const HDSP21XXPins& pinSetup, Mcp23017& expander)
-  : mPinSetup{pinSetup}, mcp{expander}
+  : mPinSetup{pinSetup}, mcp{expander}, mRegisteredUdcCharacters{0}
   {
     mcp.set_io_direction(0);
     mcp.set_all_output_bits(0);
@@ -144,6 +169,7 @@ public:
         mcp.flush_output();
         sleep_ms(1);
     }
+    mRegisteredUdcCharacters = 0;
   }
 
   /* blink character at position pos */
@@ -173,27 +199,16 @@ public:
       blink_char(pos, blinking);
   }
 
-  void write_user_char(uint8_t pos, const CustomCharacter& c, bool blinking = false)
+  void write_user_char(uint8_t pos, const CustomCharacterHandle& c, bool blinking = false)
   {
-    // D7 = 0 enables the ASCII decoder and D7 = 1 enables the UDC RAM.
-    // Currently, that mapping is "the position of the target character",
-    // even though that is wasteful if we repeat characters
-    // (and we have double the UDC RAM space than char positions)
-
-    // set current digit to use character ram at the same address.
-    const uint8_t characterAddress = pos;
-    const uint8_t udcAddress = pos;
-
-    // Write the character (maybe again) to udc address
-    write_cycle(0, udcAddress);  // Address is in data
-    for (size_t row = 0; row < c.size(); row++)
+    if (!c || !isUdcRegistered(*c))
     {
-      write_cycle(0b01000 | row, c[row]);
+      write_builtin_char(pos, c ? 'X' : '?', true);
+      return;
     }
 
     // set the pos character to use the custom character
-    write_cycle(0b11000 | characterAddress, 0b1000'0000 | udcAddress);
-
+    write_cycle(0b11000 | pos, 0b1000'0000 | (*c & 0b1111));
     blink_char(pos, blinking);
   }
 
@@ -310,6 +325,45 @@ public:
     return;
   }
 
+  // Registers a custom character into display to be used
+  CustomCharacterHandle
+  registerCustomCharacter(const hdsp21xx::CustomCharacter& characterToLoad)
+  {
+    CustomCharacterHandle newHandle = std::nullopt;
+    for (UdcCharacterIndex i = 0; i < numUdcCharacters; i++)
+    {
+
+      if (!isUdcRegistered(i))
+      {
+        // found a free spot
+        newHandle = i;
+        break;
+      }
+    }
+
+    if (newHandle)
+    {
+      // Write the character to the new udc address
+      write_cycle(0, *newHandle & 0b1111);  // Address is in data
+      for (size_t row = 0; row < characterToLoad.size(); row++)
+      {
+        write_cycle(0b01000 | row, characterToLoad[row]);
+      }
+      setUdcAt(*newHandle);
+    }
+
+    return newHandle;
+  }
+
+  constexpr
+  void
+  unregisterCustomCharacter(const CustomCharacterHandle& c)
+  {
+    if (!c)
+      return;
+    resetUdcAt(*c);
+  }
+
 private:
   // low-level routines
 
@@ -356,6 +410,47 @@ private:
     return;
   }
 
+  constexpr
+  static bool
+  isUdcIdxValid(const UdcCharacterIndex& c)
+  {
+    return c < (sizeof(decltype(mRegisteredUdcCharacters)) * 8);
+  }
+
+  constexpr
+  bool
+  isUdcRegistered(const UdcCharacterIndex& c) const
+  {
+    if (!isUdcIdxValid(c))
+      return false;
+
+    return (mRegisteredUdcCharacters & (1 << c)) != 0;
+  }
+
+  constexpr
+  void
+  setUdcAt(const UdcCharacterIndex& c)
+  {
+    if (!isUdcIdxValid(c))
+      return;
+
+    mRegisteredUdcCharacters |= 1 << c;
+  }
+
+  constexpr
+  void
+  resetUdcAt(const UdcCharacterIndex& c)
+  {
+    if (!isUdcIdxValid(c))
+      return;
+
+    mRegisteredUdcCharacters &= ~(1 << c);
+  }
+
+
+  uint16_t mRegisteredUdcCharacters;
+  static_assert(sizeof(decltype(mRegisteredUdcCharacters)) * 8 >= numUdcCharacters,
+                "Not enough space for complete bitmask");
 
   HDSP21XXPins mPinSetup;
   Mcp23017& mcp;
