@@ -180,6 +180,7 @@ main()
                 recoverTempI2c();   // does not seem to help
                 display.showError("Err Temp");
                 display.showError(maybeCurrentEnv.error());
+                // TODO: Encountered "default got value" -> reset the BME read command!
                 printf("Tried to recover I2c bus.\n");
             }
         }
