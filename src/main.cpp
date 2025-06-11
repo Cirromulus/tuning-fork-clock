@@ -176,12 +176,16 @@ main()
                 printf("Temp: %.*s\n",
                     static_cast<int>(maybeCurrentEnv.error().length()),
                     maybeCurrentEnv.error().data());
-                status.invalidTempReading();
-                recoverTempI2c();   // does not seem to help
                 display.showError("Err Temp");
                 display.showError(maybeCurrentEnv.error());
-                // TODO: Encountered "default got value" -> reset the BME read command!
+                status.invalidTempReading();
+                // (only) on timeout, we expect a stuck I2C bus, but we'll do it always.
+                recoverTempI2c();
                 printf("Tried to recover I2c bus.\n");
+                // This will re-set the read request.
+                // (only) necessary on "got default value", but we'll do it anyways.
+                bme.init();
+                printf("Inited BME\n");
             }
         }
 
