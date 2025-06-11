@@ -63,27 +63,27 @@ static_assert(std::numeric_limits<OscCount>::max() > expectedMaxCount);
 
 /*
  * The last run of ./analysis/estimate.py:
-Estimation for ../logs/2025-03-31_22-00-43_sensor_log.db (440280.027356 seconds)
-Damp factor: 0.002279174504551375
-Factors for damped period estimation: [987958.2603574242, 1.5367473577982667, -4.597156613378032e-05]
-Factors for period error estimation based on temp gradient: [2.3213648517665533, -0.057893464820847264, -0.0004974635372516944]
+Estimation for 2025-05-28_13-04-25_sensor_log.db (619487.946153 seconds)
+Damp factor: 0.0032832224304482674
+Factors for damped period estimation: [np.float64(985174.3597262433), np.float64(3.579194938902257), np.float64(-0.00038942541470154155)]
+Factors for period error estimation based on temp gradient: [np.float64(-0.30233783483291354), np.float64(0.5111493052797728), np.float64(0.00605863137525046)]
  */
 
 // The following values are taken from plot.py calculations. DIY if you want to change that.
 static constexpr std::array temperatureCalibrationPolynom {
-    987959.2603574242,      // Could be seen as "average"
-    1.5367473577982667,     // Can be seen as temperature depencence
-    -4.597156613378032e-05, // "nonlinearity" of temperature dependence
+    985174.3597262433,      // Could be seen as "average"
+    3.579194938902257,     // Can be seen as temperature depencence
+    -0.00038942541470154155, // "nonlinearity" of temperature dependence
 };
 
 static constexpr std::array tempRateCalibrationPolynom {
-    2.3213648517665533, // this is a bit pointless? Its a constant error.
-    -0.057893464820847264,
-    -0.0004974635372516944
+    -0.30233783483291354, // this is a bit pointless? Its a constant error.
+    0.5111493052797728,
+    0.00605863137525046
 };
 
 // This is not calibrated against an actual time difference,
 // but instead was "trained" on the average sample time.
-static constexpr double dampFactor {0.002279174504551375};
+static constexpr double dampFactor {0.0032832224304482674};
 
 } // namespace config
