@@ -263,7 +263,8 @@ public:
         case ParseState::timestamp:
             if (const auto maybeFailReason = mTimeParser.consume_character_ms(chr))
             {
-                printf("Could not consume time character: %.*s\n",
+                printf("Could not consume time character '%c (%X)': %.*s\n",
+                        chr, chr,
                         maybeFailReason->size(),
                         maybeFailReason->data());
                 reset();

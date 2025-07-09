@@ -76,6 +76,7 @@ main()
 
     ExternalReferenceClock externalClockSource{};   // init only now.
     externalReferenceClock = &externalClockSource;  // register for interrupt
+    // This will block forever
     // externalSourceTest(externalClockSource, display);
 
     BME280 bme{setupTempI2c()};

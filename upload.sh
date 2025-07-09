@@ -1,2 +1,2 @@
 #!/bin/bash
-make -C build &&  picotool load build/stimmgabeluhr.uf2 -f
+make -C build && sudo picotool load build/stimmgabeluhr.uf2 -f

@@ -83,7 +83,7 @@ public:
     }
 
     std::optional<uint32_t>
-    lookIntoStateMachine()
+    lookIntoStateMachine() const
     {
         printf("CounterHigh is %lu\n", counterHigh.load());
         printf("Fifo level TX: %u, RX: %u\n",
@@ -92,6 +92,7 @@ public:
         printf("Is at instr. %u\n", pio_sm_get_pc(pio, sm) - offset);
         if (pio_sm_is_rx_fifo_empty(pio, sm))
         {
+            printf("FIFO empty\n");
             return std::nullopt;
         }
         return pio_sm_get(pio, sm);
@@ -113,7 +114,8 @@ public:
             pio_sm_put(pio, sm, 1);     // any non-zero value is considered a request
         }
 
-        static constexpr unsigned maxCyclesToWait = 1;  // We have two response slots per cycle
+        // We have two response slots per cycle
+        static constexpr unsigned maxCyclesToWait = 2;
         static constexpr AbsTime maxTimePerCycle_us = maxCyclesToWait * (referenceClockFrequency / 1'000'000);
         // this is the internal, possibly drifting, MCU time. Only used for timeout.
         const auto whenToTimeout = make_timeout_time_us(maxTimePerCycle_us);
@@ -133,6 +135,9 @@ public:
         {
             return *counterLow | (static_cast<AbsTime>(counterHigh) << (sizeof(PioRegisterWidth) * 8));
         }
+
+        printf("Timeout.\n");
+        lookIntoStateMachine();
         return std::nullopt;
     }
 
