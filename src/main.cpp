@@ -223,9 +223,9 @@ main()
             // Now: Estimate! and print.
 
             // ------ The Interesting Thing ------
-            const auto delta = timeEstimator.consumeNextMeasurement(lastEnvironmentSample->temperature_centidegree);
+            const double delta = timeEstimator.consumeNextMeasurement(lastEnvironmentSample->temperature_centidegree);
             time.increaseDelta_us(delta);
-            const auto currentDriftSinceBoot_us =
+            const DiffTime currentDriftSinceBoot_us =
                 externalClockSource.getTimeSinceReferenceStable_us().value_or(clocksource::Internal::getTimeSinceReferenceStable_us())
                     - time.getElapsedTimeSinceBoot_us();
             // -----------------------------------

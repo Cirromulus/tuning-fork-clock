@@ -10,6 +10,59 @@
 
 class AbsoluteTimeManager
 {
+public:
+    struct MixedPrecisionTime
+    {
+        AbsTime mMicroseconds;
+        double mSubMicroseconds; // the fraction after the decimal
+
+        constexpr
+        MixedPrecisionTime(const AbsTime& microseconds = 0, const double& subMicroseconds = 0)
+            : mMicroseconds{microseconds}, mSubMicroseconds{subMicroseconds}
+        {
+            normalize();
+        }
+
+        constexpr
+        operator const AbsTime&() const
+        {
+            return mMicroseconds;
+        }
+
+        constexpr
+        MixedPrecisionTime operator+(const AbsTime& microseconds) const
+        {
+            return MixedPrecisionTime{mMicroseconds + microseconds, mSubMicroseconds};
+        }
+
+        constexpr
+        MixedPrecisionTime operator+(const double& microseconds) const
+        {
+            return MixedPrecisionTime{mMicroseconds, mSubMicroseconds + microseconds};
+        }
+
+        constexpr
+        void operator+=(const AbsTime& microseconds)
+        {
+            *this = *this + microseconds;
+        }
+
+        constexpr
+        void operator+=(const double& microseconds)
+        {
+            *this = *this + microseconds;
+        }
+
+    private:
+        constexpr void
+        normalize()
+        {
+            const AbsTime subMicrosRounded = llround(mSubMicroseconds);
+            mMicroseconds += subMicrosRounded;
+            mSubMicroseconds = mSubMicroseconds - subMicrosRounded;
+        }
+    };
+
     struct AbsoluteTimeSet
     {
         AbsTime timestamp_us;
@@ -33,7 +86,7 @@ public:
 
     constexpr
     void
-    increaseDelta_us(const AbsTime& delta)
+    increaseDelta_us(const double& delta)
     {
         mElapsedTimeSinceAbsolute_us += delta;
         mElapsedTimeSinceBoot_us += delta;
@@ -74,7 +127,13 @@ private:
     std::optional<AbsoluteTimeSet> mAbsoluteTime{std::nullopt};
 
     // Offset to boot time
-    AbsTime mElapsedTimeSinceBoot_us{0};
+    MixedPrecisionTime mElapsedTimeSinceBoot_us{};
     // Offset to absolute time
-    AbsTime mElapsedTimeSinceAbsolute_us{0};
+    MixedPrecisionTime mElapsedTimeSinceAbsolute_us{};
 };
+
+
+// static_assert(AbsoluteTimeManager::MixedPrecisionTime{1, 0.4}.subMicroseconds() == 1.4);
+static_assert(AbsoluteTimeManager::MixedPrecisionTime{1, 0.4} == 1);
+static_assert((AbsoluteTimeManager::MixedPrecisionTime{1, 0.4} + .1) == 2);
+static_assert((AbsoluteTimeManager::MixedPrecisionTime{1, 0.4} + 1.1) == 3);

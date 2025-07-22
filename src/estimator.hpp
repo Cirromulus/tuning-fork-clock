@@ -91,7 +91,7 @@ public:
 
     template <typename MeasurementType>
     constexpr
-    uint64_t
+    double
     consumeNextMeasurement(const MeasurementType& temperatureMeasurement)
     {
         mDamper.consumeNextCycle(temperatureMeasurement);
@@ -104,14 +104,14 @@ public:
 
         const double estimatedCorrectedPeriod_us = estimatedPeriod_us + estimatedErrorCorrection_us;
 
-        return llround(estimatedCorrectedPeriod_us);
+        return estimatedCorrectedPeriod_us;
     }
 
     /**
      * Used for logging purposes
      */
     constexpr
-    auto
+    double
     getEstimatedForkTemperature() const
     {
         return mDamper.getEstimate();
