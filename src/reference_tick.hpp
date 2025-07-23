@@ -115,7 +115,7 @@ public:
         }
 
         // We have two response slots per cycle
-        static constexpr unsigned maxCyclesToWait = 2;
+        static constexpr unsigned maxCyclesToWait = 3;
         static constexpr AbsTime maxTimePerCycle_us = maxCyclesToWait * (referenceClockFrequency / 1'000'000);
         // this is the internal, possibly drifting, MCU time. Only used for timeout.
         const auto whenToTimeout = make_timeout_time_us(maxTimePerCycle_us);
