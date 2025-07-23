@@ -55,16 +55,8 @@ for name, (column, coldesc) in columns.items():
 
 actual_period = columns['period'][0]
 estimate_period = columns['period_estimate'][0]
-constant_diff = estimate_period[0] - actual_period[0]
-estimate_period_norm = estimate_period - constant_diff
-estimate_diff_norm = estimate_period_norm - actual_period
-estimate_diff_cum = columns['period'][1].normalize(np.cumsum(estimate_diff_norm))
-
-# print (actual_period)
-# print (estimate_period)
-# print (f"Initial difference: {constant_diff}")
-# print (estimate_period_norm)
-# print (estimate_diff_norm)
+estimate_diff = actual_period - estimate_period
+estimate_diff_cum = columns['period'][1].normalize(np.cumsum(estimate_diff))
 
 plt.figure("Precision")
 ax1 = plt.subplot(212)
@@ -72,12 +64,12 @@ ax1.set_xlabel('Time [s]')
 ax2 = ax1.twinx()
 ax1.set_ylabel('Period per one Cycle [us]')
 ax1.plot(sample_time_s, actual_period, 'green', label="Measured Period")
-ax1.plot(sample_time_s, estimate_period_norm, 'red', label="Estimated Period")
+ax1.plot(sample_time_s, estimate_period, 'red', label="Estimated Period")
 ax1.legend(loc="upper left")
 
 ax2.set_ylabel('Difference [us]')
-ax2.fill_between(sample_time_s, estimate_diff_norm, 0,
-        color='orange', alpha=.5, label='Difference per period')
+ax2.fill_between(sample_time_s, columns['period'][1].normalize(estimate_diff), 0,
+        color='orange', alpha=.5, label='Estimation Error per period')
 
 ax2.legend(loc="upper right")
 
