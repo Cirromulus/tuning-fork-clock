@@ -24,13 +24,14 @@ class ClockDisplay
 
     static constexpr uint8_t nightBrightness = 1;
     static constexpr uint8_t dayBrightness = 5;
+    static constexpr uint8_t mediumBrightness = 2;
 
 public:
 
     ClockDisplay(Mcp23017& expander, HDSP21XXPins const& pinSetup) :
     mDriver{pinSetup, expander}
     {
-        mDriver.set_brightness(dayBrightness);
+        mDriver.set_brightness(mediumBrightness);
         mDegreeChar = mDriver.registerCustomCharacter(hdsp21xx::chars::degree);
         mHeartL = mDriver.registerCustomCharacter(hdsp21xx::chars::heartL);
         mHeartR = mDriver.registerCustomCharacter(hdsp21xx::chars::heartR);
@@ -44,7 +45,7 @@ public:
     void
     showError(std::string_view const& str)
     {
-        mDriver.write_string_running(str, {.end_wait_us = 500'000, .blink = true});
+        mDriver.write_string_running(str, {.per_char_wait_us = 75'000, .end_wait_us = 500'000, .blink = true});
     }
 
     void
@@ -120,7 +121,9 @@ public:
                 writeChars<2>(c, now->tm_sec);
 
                 // While we are at it, we can decide whether it is nighttime or not
-                setBrightnessBasedOnTime(now->tm_hour);
+                // Currently disabled because of too intense
+                // heat production by the display that throws off measurement
+                // setBrightnessBasedOnTime(now->tm_hour);
             }
             break;
             case DisplayState::absoluteTime_calendar:
