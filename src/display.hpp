@@ -95,8 +95,8 @@ public:
             case DisplayState::absoluteTime_stamp:
             {
                 // displays unix timestamp as seconds, skipping the most significant digits to fit to screen.
-                const unsigned eightDigits = 100'000'000;
-                const unsigned partThatIsTooMuch = *mAbsoluteTime_s / eightDigits; // eight digits
+                constexpr unsigned eightDigits = 100'000'000;
+                const unsigned partThatIsTooMuch = *mAbsoluteTime_s / eightDigits;
                 const unsigned timeToDisplay = *mAbsoluteTime_s - (partThatIsTooMuch * eightDigits);
                 const auto [end, code] = std::to_chars(mBuffer.begin(), mBuffer.end(), timeToDisplay);
                 if (code == std::errc())    // this is considered a success. meh.
@@ -120,7 +120,7 @@ public:
                 mDriver.write_builtin_char(c++, ':', true);
                 writeChars<2>(c, now->tm_sec);
 
-                // While we are at it, we can decide whether it is nighttime or not
+                // While we are at it, we can decide whether it is nighttime or not...
                 // Currently disabled because of too intense
                 // heat production by the display that throws off measurement
                 // setBrightnessBasedOnTime(now->tm_hour);
