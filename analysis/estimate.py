@@ -199,7 +199,7 @@ if args.emit_plot: # this is not too helpful
 # exit()
 
 damped_temperatures = []
-steps = 15
+steps = 20
 scaled_interest_bounds = (.01, .001)   # Hm, less manual please
 def factorScaled(f):
     return pow(f, 3)
@@ -311,17 +311,22 @@ def fit(x, y, order):
     return (np.poly1d(fit), list(reversed(fit)))
 
 fit_degree = 2  # We expect a linear relationship, but another degree slightly improves it
+# Skip first samples: Dirty setting. Usually, the damping functions
+# need some time to arrive at the "work range" as the internal error first needs to stack up.
+skip_first_samples = min(100, len(period))
+
 print ("\nOn normal data:")
-period_fit, pf_f = fit(temp, period, fit_degree)
+period_fit, pf_f = fit(temp[skip_first_samples:], period[skip_first_samples:], fit_degree)
 print (f"\nOn damped data ({perhaps_best_damp_factor}):")
-period_damped_fit, pdf_f = fit(perhaps_best_temp_estimate, period, fit_degree)
+period_damped_fit, pdf_f = fit(perhaps_best_temp_estimate[skip_first_samples:], period[skip_first_samples:], fit_degree)
 
 estimated_period_undamped = period_fit(temp)
 estimated_period_damped = period_damped_fit(perhaps_best_temp_estimate)
 error_undamped = period - estimated_period_undamped
 error_damped = period - estimated_period_damped
 
-output_file.write(f"Factors for damped period estimation: {pdf_f}\n")
+output_file.write(f"Factors for damped period estimation:\n")
+np.savetxt(output_file, pdf_f)
 # ---------------
 
 def printStats(estimated_period):
@@ -355,7 +360,8 @@ print("\nDamped best fit:")
 printStats(estimated_period_damped)
 print (f"\nOn error of period estimation, with temp gradient from temp damp diff:")
 printStats(estimated_period_deriv)
-output_file.write(f"Factors for period error estimation based on temp gradient: {pddf_f}\n")
+output_file.write(f"Factors for period error estimation based on temp gradient:\n")
+np.savetxt(output_file, pddf_f)
 
 # THe scatter-plot. Watch out, it takes some time.
 if args.emit_plot:

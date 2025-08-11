@@ -67,23 +67,34 @@ Estimation for 2025-05-28_13-04-25_sensor_log.db (619487.946153 seconds)
 Damp factor: 0.0032832224304482674
 Factors for damped period estimation: [np.float64(985174.3597262433), np.float64(3.579194938902257), np.float64(-0.00038942541470154155)]
 Factors for period error estimation based on temp gradient: [np.float64(-0.30233783483291354), np.float64(0.5111493052797728), np.float64(0.00605863137525046)]
+
+Estimation for 2025-08-06_09-05-58_sensor_log_zwischenkopie.db (432769.614446 seconds)
+Damp factor: 0.001893494029314581
+Factors for damped period estimation:
+9.885662144472119398e+05
+1.213906162853203297e+00
+8.097113008716144879e-06
+Factors for period error estimation based on temp gradient:
+-6.554192502536039244e-01
+-1.555599069694961478e-01
+2.188748997581093855e-02
  */
 
 // The following values are taken from plot.py calculations. DIY if you want to change that.
 static constexpr std::array temperatureCalibrationPolynom {
-    985174.3597262433,      // Could be seen as "average"
-    3.579194938902257,     // Can be seen as temperature depencence
-    -0.00038942541470154155, // "nonlinearity" of temperature dependence
+    9.885662144472119398e+05, // Could be seen as "average"
+    1.213906162853203297e+00, // Can be seen as temperature depencence
+    8.097113008716144879e-06, // "nonlinearity" of temperature dependence
 };
 
 static constexpr std::array tempRateCalibrationPolynom {
-    -0.30233783483291354, // this is a bit pointless? Its a constant error.
-    0.5111493052797728,
-    0.00605863137525046
+    -6.554192502536039244e-01, // this is a bit pointless? Its a constant error.
+    -1.555599069694961478e-01,
+    2.188748997581093855e-02
 };
 
 // This is not calibrated against an actual time difference,
 // but instead was "trained" on the average sample time.
-static constexpr double dampFactor {0.0032832224304482674};
+static constexpr double dampFactor {0.001893494029314581};
 
 } // namespace config
