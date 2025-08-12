@@ -58,7 +58,7 @@ temp = dataframe[data.TABLE_FORMAT['temperature'].name]
 temp_meta = data.TABLE_FORMAT['temperature']
 
 sample_time_us = np.cumsum(np.array(period))
-sample_time_s = sample_time_us / 10000000
+sample_time_s = sample_time_us / 1000000
 duration_of_measurement_us = sample_time_us[-1]
 avg_duration_of_sample_us = duration_of_measurement_us / len(dataframe)
 
@@ -171,7 +171,7 @@ period_smooth = goodSavgolBecauseILookedAtItHard(period)
 # temp_extrema = (temp_extrema[0][:1],temp_extrema[1][:1])
 # period_extrema = (period_extrema[0][:1],period_extrema[1][:1])
 
-probably_not_slower_than = 80 #s
+probably_not_slower_than = 10 * 60 #s
 # I think that if time and period are smoothed by the same amount,
 # then the average time difference is not affected by the smoothing?
 # Unfortunately, the a smoothed version is necessary for the
@@ -313,7 +313,8 @@ def fit(x, y, order):
 fit_degree = 2  # We expect a linear relationship, but another degree slightly improves it
 # Skip first samples: Dirty setting. Usually, the damping functions
 # need some time to arrive at the "work range" as the internal error first needs to stack up.
-skip_first_samples = min(100, len(period))
+skip_first_samples = min(50000, len(period))    # FIXME: Very hardcoded value
+print (f"Skipping first {skip_first_samples} samples (from second {sample_time_s[skip_first_samples]}) to allow for damping effects to settle")
 
 print ("\nOn normal data:")
 period_fit, pf_f = fit(temp[skip_first_samples:], period[skip_first_samples:], fit_degree)
@@ -347,7 +348,7 @@ def printStats(estimated_period):
 # applyErrorEstimator(temp_damp_diff, error_undamped)
 
 print ("Period error estimation with temp rate change:")
-period_damped_error_deriv_fit, pddf_f = fit(temp_damp_diff, error_damped, fit_degree)
+period_damped_error_deriv_fit, pddf_f = fit(temp_damp_diff[skip_first_samples:], error_damped[skip_first_samples:], fit_degree)
 def period_deriv_fit(temperature, temp_rate):
     return period_damped_fit(temperature) + period_damped_error_deriv_fit(temp_rate)
 estimated_period_deriv = period_deriv_fit(perhaps_best_temp_estimate, temp_damp_diff)
@@ -447,27 +448,41 @@ if args.emit_plot:
     ax1.set_xlabel('Time [s]')
     ax2 = ax1.twinx()
     ax1.set_ylabel('Period per one Cycle [us]')
+    common_alpha = .6
     ax1.plot(sample_time_s, period_meta.normalize(period),
-             'green', label="Measured Period")
+             'green', label="Measured Period", alpha=common_alpha)
+    ax1.plot(sample_time_s, period_meta.normalize(period_smooth),
+             'darkgreen', label="Measured Period (smoothed)", alpha=common_alpha)
     ax1.plot(sample_time_s, period_meta.normalize(estimated_period_undamped),
-             'darkred', label="Estimated Period")
+             'darkred', label="Estimated Period", alpha=common_alpha)
     ax1.plot(sample_time_s, period_meta.normalize(estimated_period_damped),
-             'orange', label="Estimated Period (Damped)")
+             'orange', label="Estimated Period (Damped)", alpha=common_alpha)
     ax1.plot(sample_time_s, period_meta.normalize(estimated_period_deriv),
-             'springgreen', label="Estimated Period (Damped & Rate)")
+             'springgreen', label="Estimated Period (Damped & Rate)", alpha=common_alpha)
 
     ax2.set_ylabel('Difference [us]')
-    ax2.plot(sample_time_s, period_meta.normalize(error_undamped),
-            'blue', label='Difference')
-    ax2.plot(sample_time_s, period_meta.normalize(error_damped),
-            'teal', label='Difference (Damped)')
-    ax2.plot(sample_time_s, period_meta.normalize(error_damped_deriv),
-             label="Difference (Damped & Rate)")
+    common_diff_alpha = 0.4
+    drift_damped_rate = period_meta.normalize(np.cumsum(error_damped_deriv))
+    error_damped_rate = period_meta.normalize(error_damped_deriv)
+    scaling_factor_precise = np.max(drift_damped_rate) / np.max(error_damped_rate)
+    scaling_factor = int(scaling_factor_precise / 3)
 
+    ax2.plot(sample_time_s, period_meta.normalize(error_undamped) * scaling_factor,
+            'blue', label=f'Difference * {scaling_factor}', alpha=common_diff_alpha)
+    ax2.plot(sample_time_s, period_meta.normalize(error_damped) * scaling_factor,
+             'teal', alpha=common_diff_alpha,
+             label=f'Difference (Damped) * {scaling_factor}')
+    ax2.plot(sample_time_s, error_damped_rate * scaling_factor,
+             'darkgreen', alpha=common_diff_alpha,
+             label=f"Difference (Damped & Rate) * {scaling_factor}")
+
+    ax2.plot(sample_time_s, drift_damped_rate,
+             'red', alpha=common_alpha,
+             label="Drift (Damped & Rate)")
 
     ax2.axhline(0, linestyle='dashed', color='lightblue', alpha=.5)
     ax2.fill_between(sample_time_s, period_meta.normalize(error_damped), 0,
-            color='teal', alpha=.5)
+            color='lightblue', alpha=.5)
 
 
     # unten, oben = ax2.get_ylim()
@@ -504,11 +519,12 @@ if args.emit_plot:
     # ax1.plot(sample_time_s, temp_meta.normalize(temp),
     #         label='Measured temperature', color='lightcoral')
     ax1.plot(sample_time_s, period_meta.normalize(error_damped),
-             label='Damped & Estimated')
+             label='Damped & Estimated',
+             alpha=0.5)
     ax2.plot([], [])    # force new color, or else we would start at same color as above
     for name, deriv in derive_artige.items():
         ax2.plot(sample_time_s, deriv,
-                label=name, alpha=.8)
+                label=name, alpha=.7)
     legendAllAxes(ax1, ax2)
 
     # A 3D scatter.
