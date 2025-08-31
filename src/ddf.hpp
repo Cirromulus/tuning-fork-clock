@@ -1,6 +1,7 @@
 #pragma once
 
 #include <hardware/i2c.h>
+#include <hardware/uart.h>
 #include <lib/hdsp_21xx.hpp>    // Ugly, only because of pin setup struct
 
 static constexpr size_t onboardLedNr = 16;
@@ -10,6 +11,10 @@ static constexpr uint8_t displayPortexpanderAddr = 0x20;
 i2c_inst_t* setupTempI2c();
 
 i2c_inst_t* setupMcpI2c();
+
+uart_inst_t* setupCommandPort();
+
+uart_inst_t* setupLogPort();
 
 void
 recoverTempI2c();

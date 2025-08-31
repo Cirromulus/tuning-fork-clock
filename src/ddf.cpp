@@ -57,6 +57,23 @@ i2c_inst_t* setupTempI2c()
     return config::bme280.i2c_inst;
 }
 
+uart_inst_t* setupCommandPort()
+{
+    // note use of UART_FUNCSEL_NUM for the general case
+    // where the func sel used for UART depends on the pin number
+    // Do this before calling uart_init to avoid losing data
+    gpio_set_function(config::settimePort.tx, UART_FUNCSEL_NUM(config::settimePort.uart_inst, config::settimePort.tx));
+    gpio_set_function(config::settimePort.rx, UART_FUNCSEL_NUM(config::settimePort.uart_inst, config::settimePort.rx));
+    uart_init(config::settimePort.uart_inst, config::settimePort.desiredBaudrate);
+    return config::settimePort.uart_inst;
+}
+
+uart_inst_t* setupLogPort()
+{
+    // oh well
+    return setupCommandPort();
+}
+
 void
 recoverTempI2c()
 {

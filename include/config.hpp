@@ -1,6 +1,8 @@
 #pragma once
 
-#include <hardware/i2c.h>   // for I2cConfig
+// For configuration instances
+#include <hardware/i2c.h>
+#include <hardware/uart.h>
 
 #include <stddef.h>
 #include <inttypes.h>
@@ -25,6 +27,14 @@ struct I2cConfig
     uint32_t desiredBaudrate = 300'000;
 };
 
+struct UartConfig
+{
+    unsigned rx;
+    unsigned tx;
+    uart_inst_t* uart_inst;
+    uint32_t desiredBaudrate = 115'200;
+};
+
 namespace config
 {
 
@@ -33,6 +43,9 @@ static constexpr unsigned forkWatchPin = 29;
 static constexpr unsigned referenceClockPin = 9;
 static constexpr I2cConfig bme280 {.sda = 26, .scl = 27, .i2c_inst = i2c1};
 static constexpr I2cConfig mcp {.sda = 4, .scl = 5, .i2c_inst = i2c0};
+// uart structs are actually reinterpret-casted and thus not constexval
+static const UartConfig settimePort {.rx = 13, .tx = 12, .uart_inst = uart0};
+static const UartConfig logPort = settimePort;  // Currently (or forever) we only have one outside port
 
 static constexpr AbsTime referenceClockFrequency = 1'000'000;  // counts per second
 
@@ -56,10 +69,10 @@ toMicroseconds(double frequency)
     return (1 / frequency) * referenceClockFrequency;
 }
 
-static constexpr OscCount expectedMinCount {periodsPerMeasurement * toMicroseconds(expectedOscFreq + expectedDeviation)};
-static constexpr OscCount expectedMaxCount {periodsPerMeasurement * toMicroseconds(expectedOscFreq - expectedDeviation)};
+static constexpr OscCount expectedMinCycleTime {periodsPerMeasurement * toMicroseconds(expectedOscFreq + expectedDeviation)};
+static constexpr OscCount expectedMaxCycleTime {periodsPerMeasurement * toMicroseconds(expectedOscFreq - expectedDeviation)};
 
-static_assert(std::numeric_limits<OscCount>::max() > expectedMaxCount);
+static_assert(std::numeric_limits<OscCount>::max() > expectedMaxCycleTime);
 
 /*
  * The last run of ./analysis/estimate.py:

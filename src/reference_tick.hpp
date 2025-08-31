@@ -85,14 +85,14 @@ public:
     std::optional<uint32_t>
     lookIntoStateMachine() const
     {
-        printf("CounterHigh is %lu\n", counterHigh.load());
-        printf("Fifo level TX: %u, RX: %u\n",
+        printf("\tCounterHigh is %lu\n", counterHigh.load());
+        printf("\tFifo level TX: %u, RX: %u\n",
                 pio_sm_get_tx_fifo_level(pio, sm),
                 pio_sm_get_rx_fifo_level(pio, sm));
-        printf("Is at instr. %u\n", pio_sm_get_pc(pio, sm) - offset);
+        printf("\tIs at instr. %u\n", pio_sm_get_pc(pio, sm) - offset);
         if (pio_sm_is_rx_fifo_empty(pio, sm))
         {
-            printf("FIFO empty\n");
+            printf("\tFIFO empty\n");
             return std::nullopt;
         }
         return pio_sm_get(pio, sm);
@@ -136,8 +136,8 @@ public:
             return *counterLow | (static_cast<AbsTime>(counterHigh) << (sizeof(PioRegisterWidth) * 8));
         }
 
-        printf("Timeout.\n");
-        lookIntoStateMachine();
+        // printf("External Tick Timeout:\n");
+        // lookIntoStateMachine();
         return std::nullopt;
     }
 

@@ -11,6 +11,22 @@
 // that are not needed any more (that is, as long as it works)
 
 void
+uartTest(uart_inst_t* const uart)
+{
+    while(true)
+    {
+        if (uart_is_readable_within_us(uart, 1'000'000))
+        {
+            uart_putc(uart, uart_getc(uart));
+        }
+        else
+        {
+            uart_puts(uart, "Got Nothing");
+        }
+    }
+}
+
+void
 mcpTest(Mcp23017& mcp)
 {
     bool on = true;

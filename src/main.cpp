@@ -83,6 +83,11 @@ main()
     // this will block forever
     // bmeTest(bme);
 
+    uart_inst_t* const commandPort = setupCommandPort();
+    // uartTest(commandPort);
+    uart_inst_t* const loggingPort = setupLogPort();
+    // uartTest(loggingPort);
+
     CSVLogger logger{};   // with default config
     AbsoluteTimeManager time{};
     CommandParser commandParser{time, display};
@@ -133,20 +138,28 @@ main()
         ForkMeasurement forkMeasurement;
         if (!queue_try_remove(&period_fifo, &forkMeasurement))
         {
-            // There is no new oscCount to get
+            // There is no new oscCount to get, currently.
+
+            // --- check whether there was nothing for too long
             const auto diff = absolute_time_diff_us(lastValidForkSampleTime, get_absolute_time());
-            if (diff > config::expectedMaxCount)
+            if (diff > config::expectedMaxCycleTime)
             {
                 display.showError("NoSignal");
                 status.noSignal();
             }
+
             // --------------------------------------------------------------
-            // No new updates, but now and here would be time to do something
-            // TODO: make this more understandable
-            const auto maybeChar = getchar_timeout_us(0);
-            if (maybeChar > 0)
+            // No new Measurement, but not timed out either.
+            // we have time to spare!
+            // now and here would be time to do something
+
+            if (uart_is_readable(commandPort))
             {
-                commandParser.consumeCharacter(static_cast<char>(maybeChar));
+                const auto maybeFeedback = commandParser.consumeCharacter(uart_getc(commandPort));
+                if (maybeFeedback)
+                {
+                    uart_puts(commandPort, *maybeFeedback);
+                }
             }
             // --------------------------------------------------------------
             continue;
@@ -192,13 +205,13 @@ main()
 
         // Handling sanity of measured values
         // This is based on internal reference, because precision is not important
-        if (forkMeasurement.internalReference > config::expectedMaxCount)
+        if (forkMeasurement.internalReference > config::expectedMaxCycleTime)
         {
             display.showError("fTooLow");
             status.tooLowFrequency();
             continue;
         }
-        else if (forkMeasurement.internalReference < config::expectedMinCount)
+        else if (forkMeasurement.internalReference < config::expectedMinCycleTime)
         {
             display.showError("fTooHigh");
             status.tooHighFrequency();

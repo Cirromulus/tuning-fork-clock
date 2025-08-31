@@ -7,6 +7,7 @@
 #include <string_view>
 #include <limits>
 #include <cmath>
+#include <cstdio>
 #include <optional>
 #include <expected>
 #include <functional>
@@ -193,6 +194,7 @@ class CommandParser
     {
         timestamp,
         timezone
+        // TODO: enable/disable logging?
     };
 
 public:
@@ -205,7 +207,7 @@ public:
     }
 
     constexpr
-    void
+    std::optional<const char*>
     consumeCharacter(const char& chr)
     {
         // currently, there is only one command,
@@ -215,16 +217,18 @@ public:
         {
             // transition from timestamp
             mState = ParseState::timezone;
-            return;
+            return " Now at timezone ";
         }
 
         if (chr == '\n')
         {
             // see that as an "apply"
+            std::optional<const char*> maybeMsg;
             const auto [timezone_identifier, len] = mTzParser.get();
             if (len > 0)
             {
-                printf("Setting timezone '%s', ", timezone_identifier);
+
+                maybeMsg = string("Setting timezone '%s', ", timezone_identifier);
                 setenv("TZ", timezone_identifier, 1);
                 // I currently don't know a way to check for success / correct timezone
                 tzset();
@@ -232,8 +236,8 @@ public:
             const auto maybeParsedTime_ms = mTimeParser.parseBuffer();
             if (maybeParsedTime_ms)
             {
-                // OK is the magic ACK value
-                printf("Applying timestamp %llu: OK\n", *maybeParsedTime_ms);
+                // OK is the magic ACK value for the settime.py script
+                maybeMsg = string("Applying timestamp %llu: OK\r\n", *maybeParsedTime_ms);
                 if (maybeDisplay)
                 {
                     maybeDisplay->get().showInfo("Set Time", {.end_wait_us = 200'000});
@@ -243,12 +247,12 @@ public:
             }
             else
             {
-                printf("Could not parse timestamp: %.*s\n",
+                maybeMsg = string("Could not parse timestamp: %.*s\r\n",
                         maybeParsedTime_ms.error().size(),
                         maybeParsedTime_ms.error().data());
             }
             reset();
-            return;
+            return maybeMsg;
         }
 
         // any other char
@@ -256,26 +260,29 @@ public:
         if (!isprint(chr) || chr == '\r')
         {
             // ignore unprintables and \r for now
-            return;
+            return string("unprintable char (%X)", chr);
         }
         switch (mState)
         {
         case ParseState::timestamp:
             if (const auto maybeFailReason = mTimeParser.consume_character_ms(chr))
             {
-                printf("Could not consume time character '%c (%X)': %.*s\n",
+                reset();
+                return string("Could not consume time character '%c (%X)': %.*s\r\n",
                         chr, chr,
                         maybeFailReason->size(),
                         maybeFailReason->data());
-                reset();
             }
             break;
         case ParseState::timezone:
             if (!mTzParser.consumeCharacter(chr))
             {
-                printf("Could not consume timezone character (too many?)\n");
+                reset();
+                return string("Could not consume timezone character %c (%X)\r\n", chr, chr);
             }
         }
+
+        return string("%c", chr);
     }
 
 private:
@@ -287,10 +294,28 @@ private:
         mTzParser.reset();
     }
 
+    template<class...Args>
+    std::optional<const char*>
+    string(const char* format, Args&&...args)
+    {
+        const int chars = std::snprintf(mPrintBuffer.begin(), mPrintBuffer.size(), format, std::forward<Args>(args)...);
+        if (chars > 0)
+        {
+            return mPrintBuffer.begin();
+            // return std::string_view{mPrintBuffer.begin(), static_cast<unsigned int>(chars)};
+        }
+        else
+        {
+            return std::nullopt;
+        }
+    }
+
     ParseState mState;
 
     std::optional<std::reference_wrapper<ClockDisplay>> maybeDisplay;
     AbsoluteTimeManager& timeManager;
     TimeParser mTimeParser;
     TimeZoneParser mTzParser;
+
+    std::array<char, 128> mPrintBuffer;
 };

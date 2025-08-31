@@ -45,6 +45,7 @@ public:
     void
     showError(std::string_view const& str)
     {
+        printf("Error: %.*s\n", str.length(), str.data());
         mDriver.write_string_running(str, {.per_char_wait_us = 75'000, .end_wait_us = 500'000, .blink = true});
     }
 
@@ -52,6 +53,7 @@ public:
     showInfo(std::string_view const& str, const HDSP21XX::RunningTextOptions& options = {})
     {
         // TODO: Running text etc
+        printf("Info: %.*s\n", str.length(), str.data());
         mDriver.write_string_running(str, options);
     }
 

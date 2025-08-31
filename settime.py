@@ -3,6 +3,12 @@
 import serial
 from datetime import datetime, timezone
 from time import sleep
+import argparse
+
+parser = argparse.ArgumentParser(
+                    prog='settime',
+                    description='send current time to the more precise tuning fork clock')
+
 
 def getTimeString():
     local_timezone = datetime.now(timezone.utc).astimezone()
@@ -21,19 +27,20 @@ def getTzString():
     """
     return "CET-1CEST"
 
-# TODO: Make parameter
-devicePath = '/dev/ttyACM0'
-stringcode = 'ascii'
+parser.add_argument('serial_port')
+parser.add_argument('--baudrate', default=115200)
+parser.add_argument('--stringcode', default='ascii')
+args = parser.parse_args()
 
-device = serial.Serial(devicePath, timeout=1)  # don't care for baudrate, is USB currently
+device = serial.Serial(args.serial_port, baudrate=args.baudrate, timeout=1)  # don't care for baudrate, is USB currently
 assert(device.is_open)
 
 while True:
     command = getTimeString() + ' ' + getTzString()
     print("--> ", command)
 
-    device.write((command + '\n').encode('ascii'))
-    ret = device.readline().decode('ascii').strip()
+    device.write((command + '\n').encode(args.stringcode))
+    ret = device.readline().decode(args.stringcode).strip()
     if ret:
         print ("<-- ", ret)
         if 'OK' in ret:
