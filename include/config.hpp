@@ -32,7 +32,7 @@ struct UartConfig
     unsigned rx;
     unsigned tx;
     uart_inst_t* uart_inst;
-    uint32_t desiredBaudrate = 115'200;
+    uint32_t desiredBaudrate = 230'400;
 };
 
 namespace config

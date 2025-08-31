@@ -28,7 +28,7 @@ def getTzString():
     return "CET-1CEST"
 
 parser.add_argument('serial_port')
-parser.add_argument('--baudrate', default=115200)
+parser.add_argument('--baudrate', default=230400)
 parser.add_argument('--stringcode', default='ascii')
 args = parser.parse_args()
 
