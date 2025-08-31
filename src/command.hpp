@@ -260,7 +260,7 @@ public:
         if (!isprint(chr) || chr == '\r')
         {
             // ignore unprintables and \r for now
-            return string("unprintable char (%X)", chr);
+            return std::nullopt; //string("unprintable char (%02X)", chr);
         }
         switch (mState)
         {
