@@ -88,7 +88,7 @@ main()
     uart_inst_t* const loggingPort = setupLogPort();
     // uartTest(loggingPort);
 
-    CSVLogger logger{};   // with default config
+    CSVLogger logger{loggingPort};   // with default config
     AbsoluteTimeManager time{};
     CommandParser commandParser{time, display};
 

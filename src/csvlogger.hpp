@@ -4,6 +4,7 @@
 // This include is not well for separation of concerns
 #include <lib/bme280.hpp>
 #include <include/config.hpp>   // for OscCount, which is also weird to include
+#include "serial.hpp"
 
 #include <pico/stdlib.h>
 #include <cstdio>
@@ -25,8 +26,10 @@ struct LoggerConfig
 class CSVLogger
 {
 public:
-    constexpr CSVLogger(LoggerConfig const& config = LoggerConfig{})
-        : mConfig{config}, mCurrentLine{0}
+    // TODO: Add abstraction layer to uart to not have the dependency here
+
+    constexpr CSVLogger(uart_inst_t* output, LoggerConfig const& config = LoggerConfig{})
+        : mConfig{config}, mCurrentLine{0}, mSerial{output}
     {
     }
 
@@ -41,27 +44,27 @@ public:
         // I would like to make that more generic. Enum -> Type & member translation with templates?
         if (mConfig.period)
         {
-            printf("%lu", period_counts);
+            mSerial.print("%lu", period_counts);
         }
         if (mConfig.periodExternal)
         {
-            printf(",%lu", periodExternal_counts.value_or(0));
+            mSerial.print(",%lu", periodExternal_counts.value_or(0));
         }
         if (mConfig.bmeData)
         {
-            printf(",%ld,%lu,%lu",
+            mSerial.print(",%ld,%lu,%lu",
                 bmeData.temperature_centidegree,
                 bmeData.pressure_q23_8,
                 bmeData.humidity_q22_10);
         }
         if (mConfig.estimations)
         {
-            printf(",%lu,%llu,%f", estimatedPeriod, estimatedTime_us, estimatedForkTemp_deg);
+            mSerial.print(",%lu,%llu,%f", estimatedPeriod, estimatedTime_us, estimatedForkTemp_deg);
         }
         if (mConfig.humanReadables)
         {
             static constexpr double referenceCountsPerSecond = config::referenceClockFrequency * config::periodsPerMeasurement;
-            printf(",%f,%ld,%lu,%lu",
+            mSerial.print(",%f,%ld,%lu,%lu",
                     static_cast<double>(referenceCountsPerSecond / period_counts),
                     bmeData.getTemperatureDegree(),
                     bmeData.getPressurePa(),
@@ -69,10 +72,10 @@ public:
         }
         if (mConfig.differenceToInternal)
         {
-            printf(",%lld", estimatedDrift_us);
+            mSerial.print(",%lld", estimatedDrift_us);
         }
 
-        printf ("\n");
+        mSerial.print ("\r\n");
 
         if (mCurrentLine % mConfig.headerEveryNumLines == 0)
         {
@@ -86,25 +89,28 @@ private:
     emitHeader() const
     {
         if (mConfig.period)
-            printf ("Period duration (internal) [us / %lu]", config::periodsPerMeasurement);
+            mSerial.print ("Period duration (internal) [us / %lu]", config::periodsPerMeasurement);
         if (mConfig.periodExternal)
-            printf ("Period duration (external) [us / %lu]", config::periodsPerMeasurement);
+            mSerial.print ("Period duration (external) [us / %lu]", config::periodsPerMeasurement);
         if (mConfig.bmeData)
-            printf (", Temperature [0.01 DegC], Pressure [2^(-8) Pa], Humidity [2^(-10) %RH]");
+            mSerial.print (", Temperature [0.01 DegC], Pressure [2^(-8) Pa], Humidity [2^(-10) %RH]");
         if (mConfig.estimations)
         {
-            printf (", Estimated Period duration [us / %lu]", config::periodsPerMeasurement);
-            printf (", Estimated elapsed time [us]"
+            mSerial.print (", Estimated Period duration [us / %lu]", config::periodsPerMeasurement);
+            mSerial.print (", Estimated elapsed time [us]"
                     ", Current Fork Temperature Estimation [0.01 DegC]"
                     ", Current Period Estimation [us]");
         }
         if (mConfig.humanReadables)
-            printf (", Current Frequency [Hz], Temperature [DegC], Pressure [Pa], Humidity [%RH]");
+            mSerial.print (", Current Frequency [Hz], Temperature [DegC], Pressure [Pa], Humidity [%RH]");
         if (mConfig.differenceToInternal)
-            printf (", Difference to internal time [us]");
-        printf ("\n");
+            mSerial.print (", Difference to internal time [us]");
+        mSerial.print ("\r\n");
     }
 
     LoggerConfig mConfig;
     size_t mCurrentLine;
+    mutable Serial mSerial;
+
+
 };
