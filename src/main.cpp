@@ -155,7 +155,10 @@ main()
 
             if (uart_is_readable(commandPort))
             {
-                const auto maybeFeedback = commandParser.consumeCharacter(uart_getc(commandPort));
+                // FIXME: Find out why spurious MSBit is set on every fourth char.
+                // Perhaps unintentional FIFO flag?
+                const uint8_t c = uart_getc(commandPort) & 0x7F;
+                const auto maybeFeedback = commandParser.consumeCharacter(c);
                 if (maybeFeedback)
                 {
                     uart_puts(commandPort, *maybeFeedback);

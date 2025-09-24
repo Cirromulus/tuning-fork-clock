@@ -32,7 +32,7 @@ parser.add_argument('--baudrate', default=230400)
 parser.add_argument('--stringcode', default='ascii')
 args = parser.parse_args()
 
-device = serial.Serial(args.serial_port, baudrate=args.baudrate, timeout=1)  # don't care for baudrate, is USB currently
+device = serial.Serial(args.serial_port, baudrate=args.baudrate, timeout=1)
 assert(device.is_open)
 
 while True:

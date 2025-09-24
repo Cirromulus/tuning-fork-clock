@@ -213,9 +213,16 @@ public:
         // currently, there is only one command,
         // so there is no need for a header.
         // But here it would be checked with a switch and state.
+
         if (chr == ' ')
         {
             // transition from timestamp
+            if (mState == ParseState::timezone)
+            {
+                reset();
+                return "Spurious space. Resetting!";
+            }
+            // else
             mState = ParseState::timezone;
             return " Now at timezone ";
         }
