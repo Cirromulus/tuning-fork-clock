@@ -32,17 +32,31 @@ parser.add_argument('--baudrate', default=230400)
 parser.add_argument('--stringcode', default='ascii')
 args = parser.parse_args()
 
-device = serial.Serial(args.serial_port, baudrate=args.baudrate, timeout=1)
+device = serial.Serial(args.serial_port, baudrate=args.baudrate, timeout=2)
 assert(device.is_open)
+assert(device.baudrate == args.baudrate)
+print (f"Using device {device}")
 
 while True:
     command = getTimeString() + ' ' + getTzString()
     print("--> ", command)
 
+    # clear input buffer
+    device.readline().decode(args.stringcode).strip()
+
+    # send command
     device.write((command + '\n').encode(args.stringcode))
+
+    # expect return
     ret = device.readline().decode(args.stringcode).strip()
     if ret:
         print ("<-- ", ret)
         if 'OK' in ret:
-            # TODO: Check returned timestamp for equivalence
-            break
+            returned_timestamp = ret.split(' ')[0]
+            expected_timestamp = command.split(' ')[0]
+            if returned_timestamp == expected_timestamp:
+                break
+            else:
+                print ("incorrect timestamp return.")
+                print (f"Expected: '{expected_timestamp}', got: '{returned_timestamp}'.")
+                print ("Trying again")
