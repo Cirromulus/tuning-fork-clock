@@ -55,7 +55,7 @@ repeating_timer_t environment_sample_timer;
 
 using ExternalReferenceClock = clocksource::External<config::referenceClockPin,
                                                      config::referenceClockFrequency>;
-ExternalReferenceClock* externalReferenceClock;
+ExternalReferenceClock* externalReferenceClock = nullptr;
 
 int
 main()
@@ -74,7 +74,7 @@ main()
     ClockDisplay display{expander, displayPinSetup};
     display.showInfo("Startup", {.fade_in = true, .fade_out = true});
 
-    ExternalReferenceClock externalClockSource{};   // init only now.
+    ExternalReferenceClock externalClockSource{};   // init only now. It uses PIO.
     externalReferenceClock = &externalClockSource;  // register for interrupt
     // This will block forever
     // externalSourceTest(externalClockSource, display);
@@ -243,8 +243,9 @@ main()
             const double delta = timeEstimator.consumeNextMeasurement(lastEnvironmentSample->temperature_centidegree);
             time.increaseDelta_us(delta);
             const DiffTime currentDriftSinceBoot_us =
-                externalClockSource.getTimeSinceReferenceStable_us().value_or(clocksource::Internal::getTimeSinceReferenceStable_us())
-                    - time.getElapsedTimeSinceBoot_us();
+                externalClockSource.getTimeSinceReferenceStable_us()
+                        .value_or(clocksource::Internal::getTimeSinceReferenceStable_us())
+                        - time.getElapsedTimeSinceBoot_us();
             // -----------------------------------
 
 
@@ -300,14 +301,15 @@ void fork_osc_callback(uint gpio, uint32_t events)
     // Hot cycle:
     // The more repeatable this counts, the better phase variance gets
     static size_t currentCycle = 0;
-    static AbsTime cycleStartTime_internal = 0;
-    static std::optional<AbsTime> cycleStartTime_external = 0;
+    static AbsTime cycleStartTime_internal = clocksource::Internal::getCurrentReferenceTicks();
+    static std::optional<AbsTime> cycleStartTime_external = externalReferenceClock->getCurrentReferenceTicks();
+
     if (currentCycle >= config::periodsPerMeasurement)
     {
         const AbsTime now_internal = clocksource::Internal::getCurrentReferenceTicks();
         const std::optional<AbsTime> now_external = externalReferenceClock->getCurrentReferenceTicks();
 
-        ForkMeasurement newMeasurement;
+        ForkMeasurement newMeasurement{};
         newMeasurement.internalReference = now_internal - cycleStartTime_internal;
         // I don't know whether this is actually readable or not... if both have value, then do difference.
         newMeasurement.externalReference = now_external.and_then(

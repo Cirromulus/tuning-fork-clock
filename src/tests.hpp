@@ -126,5 +126,10 @@ void externalSourceTest(const ExternalSource& externalClockSource, ClockDisplay&
             display.setElapsedTimeSinceBoot_us(eightDigits * 1'000'000);
             display.update();
         }
+        else
+        {
+            // This may happen if the frequency is not within expected limits!
+            printf("timeout ");
+        }
     }
 }

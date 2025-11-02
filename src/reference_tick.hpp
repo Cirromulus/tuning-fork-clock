@@ -98,6 +98,7 @@ public:
         return pio_sm_get(pio, sm);
     }
 
+    template <bool debug = false>
     std::optional<AbsTime>
     getCurrentReferenceTicks() const
     {
@@ -114,7 +115,10 @@ public:
             pio_sm_put(pio, sm, 1);     // any non-zero value is considered a request
         }
 
-        // We have two response slots per cycle
+        // We have two response slots per cycle,
+        // but in some unknown cornercases
+        // (aliasing of timer sources, delayed instruction of CPU?)
+        // there may be the need to wait for a longer (perceived) time.
         static constexpr unsigned maxCyclesToWait = 3;
         static constexpr AbsTime maxTimePerCycle_us = maxCyclesToWait * (referenceClockFrequency / 1'000'000);
         // this is the internal, possibly drifting, MCU time. Only used for timeout.
@@ -136,8 +140,11 @@ public:
             return *counterLow | (static_cast<AbsTime>(counterHigh) << (sizeof(PioRegisterWidth) * 8));
         }
 
-        // printf("External Tick Timeout:\n");
-        // lookIntoStateMachine();
+        if constexpr (debug)
+        {
+            printf("External Tick Timeout:\n");
+            lookIntoStateMachine();
+        }
         return std::nullopt;
     }
 
