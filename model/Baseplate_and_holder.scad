@@ -14,9 +14,9 @@ slot_thick = 3;
 
 cable_hole_d = 7;
 
-show = "beides";
-show_gummi = show == "gummi" || show == "beides";
-show_normal = show == "normal" || show == "beides";
+show = "normal";
+//show_gummi = show == "gummi" || show == "beides";
+//show_normal = show == "normal" || show == "beides";
 
 fitting_test = false;
 
@@ -73,59 +73,103 @@ module base()
 }
 
 
-module slot()
+module slot(only_contact_slot = false)
 {
 	d_unten = ring_d;
 	d_oben = slot_thick * 2;
 	oben_ende = unten_abstand + plate_dim.y;
 
-	difference()
+	if (!only_contact_slot)
 	{
-		union()
+		difference()
 		{
-			intersection()
+			union()
 			{
-				hull()
+				intersection()
 				{
-					translate([- d_unten /2 + slot_thick, 0, -1])
-						cylinder(d = d_unten , h = 1, $fn = 200);
-
-					translate([- d_oben/2 + slot_thick, 0, oben_ende])
-						cylinder(d = d_oben, h = 1, $fn = 200);
-				}
-				
-				union()
-				{
-					max_y = max(d_unten, d_oben);
-					translate([0, -max_y/2, 0])
-						cube([slot_thick +1, max_y, oben_ende]);
-					
-					translate([-unten_abstand, -max_y / 2, 0])
+					hull()
 					{
-						difference()
+						translate([- d_unten /2 + slot_thick, 0, -1])
+							cylinder(d = d_unten , h = 1, $fn = 200);
+
+						translate([- d_oben/2 + slot_thick, 0, oben_ende])
+							cylinder(d = d_oben, h = 1, $fn = 200);
+					}
+					
+					union()
+					{
+						max_y = max(d_unten, d_oben);
+						translate([0, -max_y/2, 0])
+							cube([slot_thick +1, max_y, oben_ende]);
+						
+						translate([-unten_abstand, -max_y / 2, 0])
 						{
-							cube([unten_abstand, max_y, unten_abstand]);
-							translate([0, 0, unten_abstand])
-								rotate([-90, 0, 0])
-									cylinder(d = 2 * unten_abstand, h = max_y, $fn = 150);
+							difference()
+							{
+								cube([unten_abstand, max_y, unten_abstand]);
+								translate([0, 0, unten_abstand])
+									rotate([-90, 0, 0])
+										cylinder(d = 2 * unten_abstand, h = max_y, $fn = 150);
+							}
 						}
 					}
 				}
+				//?
 			}
-			//?
-		}
 
-		// the actual slot
-		slot_depth = slot_thick;
-		translate([0, -plate_dim.z/2, 0])
-			cube([slot_depth, plate_dim.z, oben_ende + 1]);
+			// the actual slot
+			extra_space = (ring_d - plate_dim.x) / 2;
+			slot_depth = slot_thick - extra_space;
+			
+			translate([0, -plate_dim.z/2, 0])
+				cube([slot_depth, plate_dim.z, oben_ende + 1]);
+		}
+	}
+	else
+	{
+		stepsize = 1;
+		for (i = [unten_abstand : stepsize : oben_ende + stepsize])
+		{
+			slot_d = slot_thick * (i % 2 == 0 ? 1.5 : 1.25);
+			translate([0, 0, i])
+				cylinder(d = slot_d, h = stepsize, $fn = 50);
+		}
+		
+		uebergang_h = .5;
+		translate(0, 0, unten_abstand - uebergang_h )
+		cylinder(d = slot_d, h = uebergang_h );
+	}
+}
+
+
+module slot_filament()
+{
+	if (show == "beides")
+	{
+		slot();
+	}
+	if (show == "normal")
+	{
+		difference()
+		{
+			slot();
+			slot(true);
+		}
+	}
+	if (show == "gummi")
+	{
+		intersection()
+		{
+			slot();
+			slot(true);
+		}
 	}
 }
 
 module slot_trans()
 {
 	translate([ring_d/2 - slot_thick, 0, base_height])
-		slot();
+		slot_filament();
 }
 
 slot_trans();
