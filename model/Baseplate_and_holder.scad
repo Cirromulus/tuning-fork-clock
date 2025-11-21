@@ -12,9 +12,13 @@ ring_d = glass_inner_d - (ring_breite / 2);
 unten_abstand = 5;
 slot_thick = 3;
 
+cable_hole_d = 7;
+
 show = "beides";
 show_gummi = show == "gummi" || show == "beides";
 show_normal = show == "normal" || show == "beides";
+
+fitting_test = false;
 
 module plate()
 {
@@ -49,6 +53,22 @@ module base()
 					square([ring_breite, ring_depth + 1]);
 	
 		// TODO: Cable holes
+		translate([0, 0, (base_height - cable_hole_d / 2) / 2])
+		{
+			knickpunkt_y = (ring_d / 2)  - ring_breite;
+			// innen
+			translate([0, knickpunkt_y, 0])
+				rotate([45, 0, 0])
+					cylinder(d = cable_hole_d, h = ring_d, $fn = 200);
+			
+			// kugel
+			translate([0, knickpunkt_y, 0])
+				sphere(d = cable_hole_d, $fn = 200);
+			//außen
+			translate([0, knickpunkt_y , 0])
+				rotate([-90, 0, 0])
+					cylinder(d = cable_hole_d, h = ring_d, $fn = 200);
+		}
 	}
 }
 
