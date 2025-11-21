@@ -25,6 +25,13 @@
 
 using namespace std::literals;
 
+
+void
+jump_start_fork(uint16_t duration_ms);
+
+void
+setup_fork_input(bool enable = true);
+
 // Timer for enviroment sampling (i.e. Temp)
 bool
 env_sample_callback(repeating_timer_t *rt);
@@ -56,6 +63,31 @@ repeating_timer_t environment_sample_timer;
 using ExternalReferenceClock = clocksource::External<config::referenceClockPin,
                                                      config::referenceClockFrequency>;
 ExternalReferenceClock* externalReferenceClock = nullptr;
+
+// --------------
+
+// Todo: Named parameter or something better readable
+void
+setup_fork_input(bool enable)
+{
+    if (enable)
+    {
+        gpio_set_dir(config::forkWatchPin, GPIO_IN);
+        gpio_put(config::forkWatchPin, 0);  // probably
+        gpio_set_pulls(config::forkWatchPin, false, true);    // "Weak" pulldown
+    }
+    else
+    {
+        gpio_set_dir(config::forkWatchPin, GPIO_OUT);
+        gpio_put(config::forkWatchPin, 0);
+    }
+    gpio_set_function(config::forkWatchPin, GPIO_FUNC_SIO);
+    // enable or disable the callback
+    gpio_set_irq_enabled_with_callback(config::forkWatchPin,
+                                    GPIO_IRQ_EDGE_RISE,
+                                    enable,
+                                    &fork_osc_callback);
+}
 
 int
 main()
@@ -107,12 +139,7 @@ main()
 
 
     queue_init(&period_fifo, sizeof(ForkMeasurement), config::fifoSize);
-    gpio_init(config::forkWatchPin);
-    gpio_set_pulls(config::forkWatchPin, false, true);    // "Weak" pulldown
-    gpio_set_irq_enabled_with_callback(config::forkWatchPin,
-                                        GPIO_IRQ_EDGE_RISE,
-                                        true,
-                                        &fork_osc_callback);
+    setup_fork_input(true);
 
     // -- init done --
 
@@ -146,6 +173,7 @@ main()
             {
                 display.showError("NoSignal");
                 status.noSignal();
+                jump_start_fork(500);
             }
 
             // --------------------------------------------------------------
@@ -344,3 +372,29 @@ env_sample_callback(repeating_timer_t*)
     return true; // keep repeating
 }
 
+void
+jump_start_fork(uint16_t duration_ms)
+{
+    setup_fork_input(false);
+
+    static constexpr OscCount period_us = config::toMicroseconds(config::expectedOscFreq);
+    // this division is not precise, so we probably will be slightly out of tune!
+    static constexpr OscCount halfPeriod_us = period_us / 2;
+    static_assert(period_us - (halfPeriod_us * 2) < config::expectedDeviation / 2, "Too much out of tune!");
+
+    const OscCount periodsToStimulate = (duration_ms * 1000) / period_us;
+
+
+    // instead of rounding up, loop always one more time than requested (hehe)
+    for (OscCount i = 0; i <= periodsToStimulate; i++)
+    {
+        gpio_put(config::forkWatchPin, false);
+        sleep_us(period_us / 2);
+        gpio_put(config::forkWatchPin, true);
+        sleep_us(period_us / 2);
+    }
+    gpio_put(config::forkWatchPin, false);
+
+    // todo: Setup whatever it was before instead!
+    setup_fork_input(true);
+}
