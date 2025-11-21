@@ -217,26 +217,29 @@ private:
     getNextTransition() const
     {
         // Currently no fancy state machine.
-        if (mTemperature.has_value() && (mElapsedSinceBoot_s % 10 < 2))
+        const unsigned tempEndSecondToShow = mTemperature.has_value() ? 1 : 0;
+        if (mElapsedSinceBoot_s % 10 < tempEndSecondToShow)
         {
             return DisplayState::temperature;
         }
 
-        if (mDrift_ms.has_value())
+        const unsigned driftEndSecondToShow = tempEndSecondToShow + (mDrift_ms.has_value() ? 1 : 0);
+        if (mElapsedSinceBoot_s % 10 < driftEndSecondToShow)
         {
-            const unsigned endSecondToShow = 2 + (mTemperature.has_value() ? 2 : 0);
-            if (mElapsedSinceBoot_s % 10 < endSecondToShow)
-            {
-                return DisplayState::drift;
-            }
+            return DisplayState::drift;
         }
 
         if (mAbsoluteTime_s)
         {
-            if (mElapsedSinceBoot_s % 10 < 8)
-                return DisplayState::absoluteTime_time;
-            else
+            if (mElapsedSinceBoot_s % 10 > 8)
+            {
                 return DisplayState::absoluteTime_calendar;
+            }
+            else
+            {
+                // "The rest"
+                return DisplayState::absoluteTime_time;
+            }
         }
         else
         {
