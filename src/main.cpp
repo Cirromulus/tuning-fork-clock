@@ -74,7 +74,7 @@ main()
     ClockDisplay display{expander, displayPinSetup};
     display.showInfo("Startup", {.fade_in = true, .fade_out = true});
 
-    ExternalReferenceClock externalClockSource{};   // init only now. It uses PIO.
+    ExternalReferenceClock externalClockSource{config::referenceClockDiffPin};   // init only now. It uses PIO.
     externalReferenceClock = &externalClockSource;  // register for interrupt
     // This will block forever
     // externalSourceTest(externalClockSource, display);

@@ -28,7 +28,8 @@ getTimeSinceReferenceStable_us();
 };
 
 
-template <unsigned inputPinNr, AbsTime referenceClockFrequency>
+template <unsigned inputPinNr,
+          AbsTime referenceClockFrequency>
 struct External
 {
     // This is static, so for the same pin we can't have different counters callbacks.
@@ -50,11 +51,21 @@ struct External
     }
 
 public:
-    External()
+    External(std::optional<unsigned> diffPairPin = {})
     {
         counterHigh = 0;
         gpio_init(inputPinNr);
         gpio_set_pulls(inputPinNr, false, true);    // "Weak" pulldown
+
+        // this produces a moderately high-impedance ground path
+        // for the signal pin twisted pair, if not already wired to GND directly.
+        if (diffPairPin)
+        {
+            // set to "ground"
+            gpio_put(*diffPairPin, false);
+            // enable software output
+            gpio_set_function(*diffPairPin, GPIO_FUNC_SIO);
+        }
 
         if (!pio_claim_free_sm_and_add_program(&pulsecounter_program, &pio, &sm, &offset))
         {

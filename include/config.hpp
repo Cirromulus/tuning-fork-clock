@@ -41,6 +41,7 @@ namespace config
 // Near "GND" for less cable tangling
 static constexpr unsigned forkWatchPin = 29;
 static constexpr unsigned referenceClockPin = 9;
+static constexpr unsigned referenceClockDiffPin = 10;
 static constexpr I2cConfig bme280 {.sda = 26, .scl = 27, .i2c_inst = i2c1};
 static constexpr I2cConfig mcp {.sda = 4, .scl = 5, .i2c_inst = i2c0};
 // uart structs are actually reinterpret-casted and thus not constexval
