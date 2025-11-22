@@ -14,9 +14,9 @@ slot_thick = 3;
 
 cable_hole_d = 7;
 
-show = "normal";
+show = "gummi";
 //show_gummi = show == "gummi" || show == "beides";
-//show_normal = show == "normal" || show == "beides";
+show_normal = show == "normal" || show == "beides";
 
 fitting_test = false;
 
@@ -78,6 +78,9 @@ module slot(only_contact_slot = false)
 	d_unten = ring_d;
 	d_oben = slot_thick * 2;
 	oben_ende = unten_abstand + plate_dim.y;
+	
+	andruck = .2;
+	wegdruck = .5;	// i know this sounds stupid, sorry
 
 	if (!only_contact_slot)
 	{
@@ -120,9 +123,17 @@ module slot(only_contact_slot = false)
 			// the actual slot
 			extra_space = (ring_d - plate_dim.x) / 2;
 			slot_depth = slot_thick - extra_space;
-			
-			translate([0, -plate_dim.z/2, 0])
-				cube([slot_depth, plate_dim.z, oben_ende + 1]);
+			wavelength = 3;
+			stepsize = .25;
+			#for (i = [unten_abstand : stepsize : oben_ende + stepsize/2])
+			{
+				wave_pos = i % wavelength;
+				normalized_wave_pos = 1 - wave_pos / wavelength;
+				extra = (normalized_wave_pos * (andruck + wegdruck)) - andruck; 
+				// echo (i,  wave_pos, normalized_wave_pos, extra);
+				translate([0, -(plate_dim.z + extra)/2, i])
+					cube([slot_depth + extra, plate_dim.z + extra, stepsize]);
+			}
 		}
 	}
 	else
@@ -130,14 +141,14 @@ module slot(only_contact_slot = false)
 		stepsize = 1;
 		for (i = [unten_abstand : stepsize : oben_ende + stepsize])
 		{
-			slot_d = slot_thick * (i % 2 == 0 ? 1.5 : 1.25);
+			slot_d = 2 * andruck + slot_thick *  (i % 2 == 0 ? 1.4 : 1.75);
 			translate([0, 0, i])
-				cylinder(d = slot_d, h = stepsize, $fn = 50);
+				cylinder(d = slot_d, h = stepsize, $fn = $preview ? 35 : 75);
 		}
 		
-		uebergang_h = .5;
-		translate(0, 0, unten_abstand - uebergang_h )
-		cylinder(d = slot_d, h = uebergang_h );
+		//uebergang_h = .5;
+		//translate([0, 0, unten_abstand - uebergang_h])
+		//cylinder(d = slot_d, h = uebergang_h );
 	}
 }
 
@@ -175,11 +186,13 @@ module slot_trans()
 slot_trans();
 mirror([1, 0, 0])
 	slot_trans();
-base();
+
+if (show_normal)
+	base();
 
 
 
-translate([-plate_dim.x / 2, plate_dim.z/2, base_height + unten_abstand ])
+%translate([-plate_dim.x / 2, plate_dim.z/2, base_height + unten_abstand ])
 	rotate([90, 0, 0])
 		color("grey") plate();
 
