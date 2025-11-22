@@ -14,11 +14,11 @@ slot_thick = 3;
 
 cable_hole_d = 7;
 
-show = "gummi";
+show = "normal";
 //show_gummi = show == "gummi" || show == "beides";
 show_normal = show == "normal" || show == "beides";
 
-fitting_test = false;
+fitting_test = true;
 
 module plate()
 {
@@ -52,7 +52,7 @@ module base()
 				translate([ring_d / 2, 0])
 					square([ring_breite, ring_depth + 1]);
 	
-		// TODO: Cable holes
+		// Cable holes
 		translate([0, 0, (base_height - cable_hole_d / 2) / 2])
 		{
 			knickpunkt_y = (ring_d / 2)  - ring_breite;
@@ -75,12 +75,14 @@ module base()
 
 module slot(only_contact_slot = false)
 {
-	d_unten = ring_d;
+	d_unten = ring_d; // - extra_stumpf;
 	d_oben = slot_thick * 2;
 	oben_ende = unten_abstand + plate_dim.y;
+	start_slim_at = oben_ende * .5;
+
 	
 	andruck = .2;
-	wegdruck = .5;	// i know this sounds stupid, sorry
+	wegdruck = .4;	// i know this sounds stupid, sorry
 
 	if (!only_contact_slot)
 	{
@@ -90,13 +92,27 @@ module slot(only_contact_slot = false)
 			{
 				intersection()
 				{
-					hull()
+					union()
 					{
-						translate([- d_unten /2 + slot_thick, 0, -1])
-							cylinder(d = d_unten , h = 1, $fn = 200);
+						hull() // the slotty base stability thingimabob
+						{
+							translate([- d_unten /2 + slot_thick, 0, -1])
+								cylinder(d = d_unten , h = 1, $fn = 200);
 
-						translate([- d_oben/2 + slot_thick, 0, oben_ende])
-							cylinder(d = d_oben, h = 1, $fn = 200);
+							translate([- d_oben/2 + slot_thick, 0, start_slim_at])
+								cylinder(d = d_oben, h = 1, $fn = 200);
+						}
+						
+						/* // The upper part
+						hull()
+						{
+							translate([- d_oben/2 + slot_thick, 0, start_slim_at])
+								cylinder(d = d_oben, h = 1, $fn = 200);
+							
+							translate([- d_oben/2 + slot_thick, 0, oben_ende])
+								cylinder(d = d_oben, h = 1, $fn = 200);
+						}
+						*/
 					}
 					
 					union()
@@ -125,12 +141,12 @@ module slot(only_contact_slot = false)
 			slot_depth = slot_thick - extra_space;
 			wavelength = 3;
 			stepsize = .25;
-			#for (i = [unten_abstand : stepsize : oben_ende + stepsize/2])
+			color("green") for (i = [unten_abstand : stepsize : oben_ende + stepsize/2])
 			{
 				wave_pos = i % wavelength;
 				normalized_wave_pos = 1 - wave_pos / wavelength;
 				extra = (normalized_wave_pos * (andruck + wegdruck)) - andruck; 
-				// echo (i,  wave_pos, normalized_wave_pos, extra);
+
 				translate([0, -(plate_dim.z + extra)/2, i])
 					cube([slot_depth + extra, plate_dim.z + extra, stepsize]);
 			}
@@ -138,17 +154,29 @@ module slot(only_contact_slot = false)
 	}
 	else
 	{
+		inner_slot_d = 2 * andruck + slot_thick * 1.4;
+		outer_slot_d = 2 * andruck + slot_thick * 1.7;
 		stepsize = 1;
+		$fn = $preview ? 35 : 75;
 		for (i = [unten_abstand : stepsize : oben_ende + stepsize])
 		{
-			slot_d = 2 * andruck + slot_thick *  (i % 2 == 0 ? 1.4 : 1.75);
+			slot_d = (i % 2 == 0 ? inner_slot_d : outer_slot_d);
 			translate([0, 0, i])
-				cylinder(d = slot_d, h = stepsize, $fn = $preview ? 35 : 75);
+				cylinder(d = slot_d, h = stepsize);
 		}
 		
-		//uebergang_h = .5;
-		//translate([0, 0, unten_abstand - uebergang_h])
-		//cylinder(d = slot_d, h = uebergang_h );
+		// kleiner extra halter
+		uebergang_h = .3;
+		extra_halter = 2;
+		translate([-outer_slot_d/2, -(outer_slot_d + extra_halter)/ 2, unten_abstand - uebergang_h])
+			cube([outer_slot_d-.5, outer_slot_d + extra_halter, uebergang_h] );
+		// cut more away for a spring effect
+		if (show_normal)
+		{
+			extra_platz_drunter = 1;
+			translate([0, 0, unten_abstand - extra_platz_drunter])
+				cylinder(d = plate_dim.z * 1.75, h = extra_platz_drunter);
+		}
 	}
 }
 
@@ -183,14 +211,34 @@ module slot_trans()
 		slot_filament();
 }
 
-slot_trans();
-mirror([1, 0, 0])
+module slots_trans()
+{
 	slot_trans();
+	mirror([1, 0, 0])
+		slot_trans();
+}
 
-if (show_normal)
-	base();
-
-
+if (!fitting_test)
+{
+	slots_trans();
+	if (show_normal)
+		base();
+}
+else
+{
+	intersection()
+	{
+		union()
+		{
+			slots_trans();
+			if (show_normal)
+				base();
+		}
+		h = 30;
+		translate([0, 0, h/2 + base_height - (ring_depth + 1)])
+			cube([base_diam+5, base_diam, h], center = true);
+	}
+}
 
 %translate([-plate_dim.x / 2, plate_dim.z/2, base_height + unten_abstand ])
 	rotate([90, 0, 0])
