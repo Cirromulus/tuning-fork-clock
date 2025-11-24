@@ -91,11 +91,6 @@ module slot(only_contact_slot = false)
 	start_slim_at = oben_ende * .5;
 	slim_exists = false;
 
-	areas_for_contact_z = [
-		[0, plate_dim.y / 4],
-		[plate_dim.y / 4, plate_dim.y],
-	];
-	
 	andruck = .25;
 	wegdruck = .4;	// i know this sounds stupid, sorry
 
@@ -153,10 +148,11 @@ module slot(only_contact_slot = false)
 			// the actual slot
 			push_on_x = false;
 			slot_x = slot_thick / 2 - .3;	// fixme
-			wavelength = 10;
+			end_z = slim_exists ? oben_ende : start_slim_at;
 			stepsize = .5;
+			wavelength = ((end_z - unten_abstand) + /*lol*/ 2* stepsize) / 10;
 			extra_x_abstand = push_on_x ? .25 : slot_x; // damit es nicht ganz so stark dort angedrückt wird
-			for (i = [unten_abstand : stepsize : (slim_exists ? oben_ende : start_slim_at) + stepsize/2])
+			for (i = [unten_abstand : stepsize : end_z + stepsize])
 			{
 				wave_pos = (i - unten_abstand) % wavelength;
 				normalized_wave_pos = 1 - wave_pos / wavelength;
@@ -175,7 +171,7 @@ module slot(only_contact_slot = false)
 		outer_slot_d = 2 * andruck + slot_thick * 2.5;;
 		stepsize = 1;
 		$fn = $preview ? 35 : 75;
-		for (i = [unten_abstand : stepsize : oben_ende + stepsize])
+		for (i = [unten_abstand : stepsize : (slim_exists ? oben_ende : start_slim_at) + stepsize/2])
 		{
 			slot_d = (i % 2 == 0 ? inner_slot_d : outer_slot_d);
 			translate([-x_length /2, -slot_d/2, i])
