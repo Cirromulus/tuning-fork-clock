@@ -1,10 +1,10 @@
 plate_dim = [90, 150, 2];
 
-base_diam = 125;
+base_diam = 115; // originally: 125;
 base_height = 14;
 
 ring_depth = 4;
-glass_inner_d = 95;
+glass_inner_d = 95.5;
 glass_inner_d_l = 2.5;
 ring_breite = glass_inner_d_l + 1;
 ring_d = glass_inner_d - (ring_breite / 2);
@@ -14,11 +14,11 @@ slot_thick = 3;
 
 cable_hole_d = 7;
 
-show = "normal";
+show = "gummi";
 //show_gummi = show == "gummi" || show == "beides";
 show_normal = show == "normal" || show == "beides";
 
-fitting_test = true;
+fitting_test = false;
 
 module plate()
 {
@@ -38,6 +38,8 @@ module base()
 	diam = base_diam;
 	height = base_height;
 
+	knickpunkt_y = (ring_d / 2)  - ring_breite;
+
 	difference()
 	{
 		translate([0, 0, height / 2]) intersection()
@@ -51,11 +53,10 @@ module base()
 			rotate_extrude($fn = $preview ? 100 : 300)
 				translate([ring_d / 2, 0])
 					square([ring_breite, ring_depth + 1]);
-	
+
 		// Cable holes
 		translate([0, 0, (base_height - cable_hole_d / 2) / 2])
 		{
-			knickpunkt_y = (ring_d / 2)  - ring_breite;
 			// innen
 			translate([0, knickpunkt_y, 0])
 				rotate([45, 0, 0])
@@ -70,18 +71,32 @@ module base()
 					cylinder(d = cable_hole_d, h = ring_d, $fn = 200);
 		}
 	}
+	
+	// cable holder tower
+	translate([0, knickpunkt_y  - (2 * cable_hole_d + 2), 0])
+		difference()
+		{
+			cylinder(d = cable_hole_d, h = plate_dim.y, $fn = $preview ? 100 : 300);
+			translate([0 ,cable_hole_d, 0])
+				cylinder(d = 2 * cable_hole_d, h = plate_dim.y + 1, $fn = $preview ? 100 : 300);
+		}
 }
 
 
 module slot(only_contact_slot = false)
 {
 	d_unten = ring_d; // - extra_stumpf;
-	d_oben = slot_thick * 2;
+	d_oben = ring_d / 4;
 	oben_ende = unten_abstand + plate_dim.y;
 	start_slim_at = oben_ende * .5;
+	slim_exists = false;
 
+	areas_for_contact_z = [
+		[0, plate_dim.y / 4],
+		[plate_dim.y / 4, plate_dim.y],
+	];
 	
-	andruck = .2;
+	andruck = .25;
 	wegdruck = .4;	// i know this sounds stupid, sorry
 
 	if (!only_contact_slot)
@@ -103,8 +118,8 @@ module slot(only_contact_slot = false)
 								cylinder(d = d_oben, h = 1, $fn = 200);
 						}
 						
-						/* // The upper part
-						hull()
+						// The upper part
+						if (slim_exists) hull()
 						{
 							translate([- d_oben/2 + slot_thick, 0, start_slim_at])
 								cylinder(d = d_oben, h = 1, $fn = 200);
@@ -112,7 +127,6 @@ module slot(only_contact_slot = false)
 							translate([- d_oben/2 + slot_thick, 0, oben_ende])
 								cylinder(d = d_oben, h = 1, $fn = 200);
 						}
-						*/
 					}
 					
 					union()
@@ -137,39 +151,42 @@ module slot(only_contact_slot = false)
 			}
 
 			// the actual slot
-			extra_space = (ring_d - plate_dim.x) / 2;
-			slot_depth = slot_thick - extra_space;
-			wavelength = 3;
-			stepsize = .25;
-			color("green") for (i = [unten_abstand : stepsize : oben_ende + stepsize/2])
+			push_on_x = false;
+			slot_x = slot_thick / 2 - .3;	// fixme
+			wavelength = 10;
+			stepsize = .5;
+			extra_x_abstand = push_on_x ? .25 : slot_x; // damit es nicht ganz so stark dort angedrückt wird
+			for (i = [unten_abstand : stepsize : (slim_exists ? oben_ende : start_slim_at) + stepsize/2])
 			{
-				wave_pos = i % wavelength;
+				wave_pos = (i - unten_abstand) % wavelength;
 				normalized_wave_pos = 1 - wave_pos / wavelength;
 				extra = (normalized_wave_pos * (andruck + wegdruck)) - andruck; 
 
-				translate([0, -(plate_dim.z + extra)/2, i])
-					cube([slot_depth + extra, plate_dim.z + extra, stepsize]);
+				translate([-1, -(plate_dim.z + extra)/2, i])
+					cube([slot_x + (push_on_x ? (extra + extra_x_abstand) : slot_x) + 1, plate_dim.z + extra, stepsize]);
 			}
 		}
 	}
 	else
 	{
-		inner_slot_d = 2 * andruck + slot_thick * 1.4;
-		outer_slot_d = 2 * andruck + slot_thick * 1.7;
+		// Die Zone aus gummi, die aus dem "beides" rausgeschnitten wird
+		x_length = 1.5 * slot_thick;
+		inner_slot_d = 2 * andruck + slot_thick * 2;
+		outer_slot_d = 2 * andruck + slot_thick * 2.5;;
 		stepsize = 1;
 		$fn = $preview ? 35 : 75;
 		for (i = [unten_abstand : stepsize : oben_ende + stepsize])
 		{
 			slot_d = (i % 2 == 0 ? inner_slot_d : outer_slot_d);
-			translate([0, 0, i])
-				cylinder(d = slot_d, h = stepsize);
+			translate([-x_length /2, -slot_d/2, i])
+				cube([x_length , slot_d , stepsize]);
 		}
 		
 		// kleiner extra halter
-		uebergang_h = .3;
-		extra_halter = 2;
-		translate([-outer_slot_d/2, -(outer_slot_d + extra_halter)/ 2, unten_abstand - uebergang_h])
-			cube([outer_slot_d-.5, outer_slot_d + extra_halter, uebergang_h] );
+		uebergang_h = .5;
+		extra_halter = 5;
+		translate([-x_length/2, -(outer_slot_d + extra_halter)/ 2, unten_abstand - uebergang_h])
+			cube([x_length, outer_slot_d + extra_halter, uebergang_h] );
 		// cut more away for a spring effect
 		if (show_normal)
 		{
