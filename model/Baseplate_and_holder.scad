@@ -18,7 +18,7 @@ show = "normal";
 //show_gummi = show == "gummi" || show == "beides";
 show_normal = show == "normal" || show == "beides";
 
-fitting_test = true;
+fitting_test = false;
 
 module plate()
 {
@@ -44,7 +44,8 @@ module base()
 	{
 		translate([0, 0, height / 2]) intersection()
 		{
-			sphere(d = diam, $fn = $preview ? 100 : 300);
+			scale([1, 1, .6])
+				sphere(d = diam, $fn = $preview ? 100 : 300);
 			cube([diam + 2, diam + 2, height], center = true);
 		}
 		
@@ -88,10 +89,10 @@ module slot(only_contact_slot = false)
 	d_unten = ring_d; // - extra_stumpf;
 	d_oben = ring_d / 8;
 	oben_ende = unten_abstand + plate_dim.y;
-	start_slim_at = oben_ende * .5;
+	start_slim_at = oben_ende * .4;
 	slim_exists = false;
 
-	andruck = .25;
+	andruck = .26;
 	wegdruck = .4;	// i know this sounds stupid, sorry
 
 	if (!only_contact_slot)
@@ -154,7 +155,8 @@ module slot(only_contact_slot = false)
 			extra_x_abstand = push_on_x ? .25 : slot_x; // damit es nicht ganz so stark dort angedrückt wird
 			for (i = [unten_abstand : stepsize : end_z + stepsize])
 			{
-				wave_pos = (i - unten_abstand) % wavelength;
+				// max distance for the hard (normal) part
+				wave_pos = show != "normal" ? (i - unten_abstand) % wavelength : 0;
 				normalized_wave_pos = 1 - wave_pos / wavelength;
 				extra = (normalized_wave_pos * (andruck + wegdruck)) - andruck; 
 
@@ -166,7 +168,7 @@ module slot(only_contact_slot = false)
 	else
 	{
 		// Die Zone aus gummi, die aus dem "beides" rausgeschnitten wird
-		y_ratio = .4;
+		y_ratio = .38;	// how much smaller the top is vs lower 
 		x_length = 1.5 * slot_thick_x;
 		inner_slot_d = 2 * andruck + slot_thick_x * 2;
 		outer_slot_d = 2 * andruck + slot_thick_x * 3;
