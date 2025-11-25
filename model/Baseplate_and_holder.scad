@@ -10,15 +10,15 @@ ring_breite = glass_inner_d_l + 1;
 ring_d = glass_inner_d - (ring_breite / 2);
 
 unten_abstand = 5;
-slot_thick = 3;
+slot_thick_x = 6;
 
 cable_hole_d = 7;
 
-show = "gummi";
+show = "normal";
 //show_gummi = show == "gummi" || show == "beides";
 show_normal = show == "normal" || show == "beides";
 
-fitting_test = false;
+fitting_test = true;
 
 module plate()
 {
@@ -86,7 +86,7 @@ module base()
 module slot(only_contact_slot = false)
 {
 	d_unten = ring_d; // - extra_stumpf;
-	d_oben = ring_d / 4;
+	d_oben = ring_d / 8;
 	oben_ende = unten_abstand + plate_dim.y;
 	start_slim_at = oben_ende * .5;
 	slim_exists = false;
@@ -106,20 +106,20 @@ module slot(only_contact_slot = false)
 					{
 						hull() // the slotty base stability thingimabob
 						{
-							translate([- d_unten /2 + slot_thick, 0, -1])
+							translate([- d_unten /2 + slot_thick_x, 0, -1])
 								cylinder(d = d_unten , h = 1, $fn = 200);
 
-							translate([- d_oben/2 + slot_thick, 0, start_slim_at])
+							translate([- d_oben/2 + slot_thick_x, 0, start_slim_at])
 								cylinder(d = d_oben, h = 1, $fn = 200);
 						}
 						
 						// The upper part
 						if (slim_exists) hull()
 						{
-							translate([- d_oben/2 + slot_thick, 0, start_slim_at])
+							translate([- d_oben/2 + slot_thick_x, 0, start_slim_at])
 								cylinder(d = d_oben, h = 1, $fn = 200);
 							
-							translate([- d_oben/2 + slot_thick, 0, oben_ende])
+							translate([- d_oben/2 + slot_thick_x, 0, oben_ende])
 								cylinder(d = d_oben, h = 1, $fn = 200);
 						}
 					}
@@ -128,7 +128,7 @@ module slot(only_contact_slot = false)
 					{
 						max_y = max(d_unten, d_oben);
 						translate([0, -max_y/2, 0])
-							cube([slot_thick +1, max_y, oben_ende]);
+							cube([slot_thick_x +1, max_y, oben_ende]);
 						
 						translate([-unten_abstand, -max_y / 2, 0])
 						{
@@ -147,7 +147,7 @@ module slot(only_contact_slot = false)
 
 			// the actual slot
 			push_on_x = false;
-			slot_x = slot_thick / 2 - .3;	// fixme
+			slot_x = slot_thick_x / 2 - .3;	// fixme
 			end_z = slim_exists ? oben_ende : start_slim_at;
 			stepsize = .5;
 			wavelength = ((end_z - unten_abstand) + /*lol*/ 2* stepsize) / 10;
@@ -166,29 +166,34 @@ module slot(only_contact_slot = false)
 	else
 	{
 		// Die Zone aus gummi, die aus dem "beides" rausgeschnitten wird
-		x_length = 1.5 * slot_thick;
-		inner_slot_d = 2 * andruck + slot_thick * 2;
-		outer_slot_d = 2 * andruck + slot_thick * 2.5;;
+		y_ratio = .4;
+		x_length = 1.5 * slot_thick_x;
+		inner_slot_d = 2 * andruck + slot_thick_x * 2;
+		outer_slot_d = 2 * andruck + slot_thick_x * 3;
 		stepsize = 1;
 		$fn = $preview ? 35 : 75;
-		for (i = [unten_abstand : stepsize : (slim_exists ? oben_ende : start_slim_at) + stepsize/2])
+		ende_z = slim_exists ? oben_ende : start_slim_at;
+		for (i = [unten_abstand : stepsize : ende_z + stepsize/2])
 		{
-			slot_d = (i % 2 == 0 ? inner_slot_d : outer_slot_d);
+			ratio_done = ((i - unten_abstand) / (ende_z - unten_abstand));
+			current_slot = i % 2 == 0 ? inner_slot_d : outer_slot_d;
+			width_diff_mixed = ((y_ratio * ratio_done) + (1 - ratio_done));
+			slot_d = current_slot * width_diff_mixed;
 			translate([-x_length /2, -slot_d/2, i])
 				cube([x_length , slot_d , stepsize]);
 		}
 		
 		// kleiner extra halter
 		uebergang_h = .5;
-		extra_halter = 5;
+		extra_halter = 0;
 		translate([-x_length/2, -(outer_slot_d + extra_halter)/ 2, unten_abstand - uebergang_h])
 			cube([x_length, outer_slot_d + extra_halter, uebergang_h] );
 		// cut more away for a spring effect
 		if (show_normal)
 		{
-			extra_platz_drunter = 1;
-			translate([0, 0, unten_abstand - extra_platz_drunter])
-				cylinder(d = plate_dim.z * 1.75, h = extra_platz_drunter);
+			extra_platz_drunter = 3;
+			#translate([slot_thick_x * .25 + 1, 0, unten_abstand - extra_platz_drunter])
+				cylinder(d = slot_thick_x, h = extra_platz_drunter);
 		}
 	}
 }
@@ -220,7 +225,7 @@ module slot_filament()
 
 module slot_trans()
 {
-	translate([ring_d/2 - slot_thick, 0, base_height])
+	translate([ring_d/2 - slot_thick_x, 0, base_height])
 		slot_filament();
 }
 
