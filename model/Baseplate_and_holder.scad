@@ -92,7 +92,7 @@ module slot(only_contact_slot = false)
 	start_slim_at = oben_ende * .4;
 	slim_exists = false;
 
-	andruck = .26;
+	andruck = .4;
 	wegdruck = .4;	// i know this sounds stupid, sorry
 
 	if (!only_contact_slot)
