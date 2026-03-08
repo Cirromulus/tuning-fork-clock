@@ -115,27 +115,6 @@ module spring(mit_fuss = true)
 			}
 		}
 	}
-	/*
-	difference()
-	{
-		union()
-		{
-			circle(outer_diam / 2);
-			for(h = [-outer_diam/2, outer_diam/2 - ws])
-			{
-				translate([h, -width / 2])
-					square([ws, width]);
-			}
-			
-			for(side = [-width/2, width/2 - ws])
-			{
-				translate([- outer_diam/2, side])
-					square([outer_diam, ws]);
-			}
-		}
-		circle(fork_hals_d / 2);
-	}
-	*/
 }
 
 //module spring_negative()
@@ -153,15 +132,21 @@ module main_holder()
 		{
 			// main plate
 			cube([holder_l, holder_w, ws]);
-			// thing for screws
-			
+			// thing for screws and that keeps deckel somewhat in place (x)
 			for (y  = [0, holder_w - holder_cube_breit])
 			{
-				
 				dick = holder_l / 4;
 				translate([holder_l/2 - dick/2, y, 0])
 					cube([dick, holder_cube_breit, mounting_height]);
 			}
+			// thing that keeps deckel somewhat in place (y)
+			for (y  = [holder_cube_breit, (holder_w - holder_cube_breit) - ws])
+			{
+				block_x = holder_l - 4*ws;
+				translate([(holder_l - block_x)/2, y, ws])
+					cube([block_x, ws, ws+ws]);// need to be higher than the connector arms
+			}
+			// spring parts
 			for (x = [0, holder_l - spring_d])
 			{
 				translate([x, 0, 0])
@@ -170,6 +155,7 @@ module main_holder()
 						spring();
 				}
 			}
+		
 		}
 		#translated_fork();
 		#main_holder_screws();
@@ -179,52 +165,39 @@ module main_holder()
 
 module deckel_main_holder()
 {
-	translate([holder_anfang, -holder_w/2, mounting_height])
+	difference()
 	{
-		for(x  = [0, holder_l - spring_d]) 
+		translate([holder_anfang, -holder_w/2, mounting_height])
 		{
-			translate([x, 0, 0])
+			for(x  = [0, holder_l - spring_d]) 
 			{
-				// UGLY!!!
-				translate([0, 0, mounting_height])mirror([0, 0, 1])rotate([0, -90, 0])
-					spring(false);
-			}
-		}
-		uff_h = spring_d + 1;
-		for(y = [0, holder_w - ws])
-			translate([0, y, fork_hals_d / 2])
-				cube([holder_l, ws, uff_h]);
-		for (y  = [0, holder_w - holder_cube_breit])
-		{
-			dick = holder_l / 4 + .5;
-			hoch = mounting_height-2.8;
-			block_x = holder_l - 4*ws;
-			difference()
-			{
-				translate([block_x/2 - 1.5*ws, y, -hoch])
-					cube([block_x , holder_cube_breit, mounting_height + uff_h - .05]);
-				translate([holder_l/2 - dick/2, y, -hoch ])
-					cube([dick, holder_cube_breit, hoch]);
-			}
-		}
-	}
-	/*
-	difference() {
-		hull() {
-			intersection() {
-				scale([1, 1.1, 1.1]) translated_fork();
-				translate([(fork_hals_l-holder_l)/2, -holder_w/2, mounting_height+slot_h/2]) {
-					cube([holder_l, holder_w, 2*mounting_height]);
+				translate([x, 0, 0])
+				{
+					// UGLY!!!
+					translate([0, 0, mounting_height])mirror([0, 0, 1])rotate([0, -90, 0])
+						spring(false);
 				}
 			}
-			translate([(fork_hals_l-holder_l)/2, -holder_w/2, mounting_height+slot_h/2])
-				cube([holder_l, holder_w, ws]);
+			uff_h = spring_d + 1;
+			for(y = [0, holder_w - ws])
+				translate([0, y, fork_hals_d / 2])
+					cube([holder_l, ws, uff_h]);
+			for (y  = [0, holder_w - holder_cube_breit])
+			{
+				dick = holder_l / 4 + .5;
+				hoch = mounting_height-2.8;
+				block_x = holder_l - 4*ws;
+				difference()
+				{
+					translate([block_x/2 - 1.5*ws, y, -hoch])
+						cube([block_x , holder_cube_breit, mounting_height + uff_h - .05]);
+					translate([holder_l/2 - dick/2, y, -hoch ])
+						cube([dick, holder_cube_breit, hoch]);
+				}
+			}
 		}
-		translated_fork();
-		// screws
 		main_holder_screws(bite = false);
 	}
-	*/
 }
 
 if(show == "all" || show == "base")
@@ -234,7 +207,8 @@ if(show == "all" || show == "base")
 
 // deckel main holder
 if(show == "all" || show == "top")
-	deckel_main_holder();
+	color("orange")
+		deckel_main_holder();
 
 // spule und magnet
 sp_holder_l = spule.x + 2*ws;
@@ -310,10 +284,10 @@ if(show == "all" || show == "base")
 				translate([fork_hals_l-screw_head.x+magic_offs.x, fork_abstand/2+magic_offs.y, conn_h])
 					screw(bite = false);
 				main_holder_screws();
-				for (x = [0, holder_l - spring_d, /*additional to get support out */ holder_l - 2*spring_d])
+				for (x = [0, holder_l - spring_d])
 				{
-					translate([holder_anfang-0.5 + x, -holder_w/2, ws])
-						cube([spring_d + 1, holder_w, ws]);
+					translate([holder_anfang-0.5 + x, -holder_w/2 + ws, ws])
+						cube([spring_d + 1, holder_w - (ws+spring_d * 2), ws]);
 				}
 			}
 		}
