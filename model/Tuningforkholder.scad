@@ -62,7 +62,7 @@ module spule_array() {
 	}
 }
 
-module screw(bite = true, l = 10, headsunk = false) {
+module screw(bite = true, l = 15, headsunk = false) {
 	$fn = $preview ? 10 : 30;
 	d = bite ? screw_d - .75 : screw_d;
 	translate([0,0,-(l-.01)])cylinder(d = d, h = l);
@@ -78,38 +78,163 @@ holder_w = fork_hals_d * 4;
 holder_l = (fork_hals_l-fork_hals_sphere)/2;
 
 module main_holder_screws(bite = true) {
-	for(x = [holder_l/5, 4*holder_l/5]) {
-		for(y = [-((holder_w - screw_head.x)/2-ws), ((holder_w - screw_head.x)/2-ws)]) {
-			translate([(fork_hals_l-holder_l)/2+x, y, mounting_height+2*ws])
+	for(x = [holder_l / 2] /*[holder_l/5, 4*holder_l/5]*/) {
+		for(y = [-((holder_w - screw_head.x)/2), ((holder_w - screw_head.x)/2)]) {
+			translate([(fork_hals_l-holder_l)/2+x, y, mounting_height+2*ws + fork_hals_d/2])
 				screw(bite = bite);
 		}
 	}
 }
 
+spring_d = 1;
+module spring(mit_fuss = true)
+{
+	ws = 2;
+	outer_diam = fork_hals_d + ws * 2;
+	width = holder_w;
+	mirror([0, 0, 1]) /* lol */ linear_extrude(spring_d)
+	{
+		if (mit_fuss)
+		{
+		square([ws*2, ws]);
+		translate([0, holder_w - ws])
+			square([ws*2, ws]);
+		}
+		translate([mounting_height, 0])
+		{
+			translate([-fork_hals_d / 2 - ws, 0])
+				square([ws, holder_w]);
+			translate([0, holder_w / 2])
+			difference()
+			{
+				r = fork_hals_d / 2 + ws;
+				circle(r, $fn = 50);
+				translate([0, -(r+1)])
+					square([r, (r*2)+1]);
+				circle(fork_hals_d/2, $fn = 50);
+			}
+		}
+	}
+	/*
+	difference()
+	{
+		union()
+		{
+			circle(outer_diam / 2);
+			for(h = [-outer_diam/2, outer_diam/2 - ws])
+			{
+				translate([h, -width / 2])
+					square([ws, width]);
+			}
+			
+			for(side = [-width/2, width/2 - ws])
+			{
+				translate([- outer_diam/2, side])
+					square([outer_diam, ws]);
+			}
+		}
+		circle(fork_hals_d / 2);
+	}
+	*/
+}
+
+//module spring_negative()
+//{
+//	hull() spring();
+//}
+
 // main holder
-if(show == "all" || show == "base") difference() {
-	translate([(fork_hals_l-holder_l)/2, -holder_w/2, 0])
-		cube([holder_l, holder_w, mounting_height-slot_h/2]);
-	translated_fork();
-	main_holder_screws();
+holder_anfang = (fork_hals_l-holder_l)/2;	// but whi?
+holder_cube_breit = holder_w/2 - fork_hals_d;
+module main_holder()
+{
+	difference() {
+		translate([holder_anfang, -holder_w/2, 0])
+		{
+			// main plate
+			cube([holder_l, holder_w, ws]);
+			// thing for screws
+			
+			for (y  = [0, holder_w - holder_cube_breit])
+			{
+				
+				dick = holder_l / 4;
+				translate([holder_l/2 - dick/2, y, 0])
+					cube([dick, holder_cube_breit, mounting_height]);
+			}
+			for (x = [0, holder_l - spring_d])
+			{
+				translate([x, 0, 0])
+				{
+					rotate([0, -90, 0])
+						spring();
+				}
+			}
+		}
+		#translated_fork();
+		#main_holder_screws();
+		
+	}
+}
+
+module deckel_main_holder()
+{
+	translate([holder_anfang, -holder_w/2, mounting_height])
+	{
+		for(x  = [0, holder_l - spring_d]) 
+		{
+			translate([x, 0, 0])
+			{
+				// UGLY!!!
+				translate([0, 0, mounting_height])mirror([0, 0, 1])rotate([0, -90, 0])
+					spring(false);
+			}
+		}
+		uff_h = spring_d + 1;
+		for(y = [0, holder_w - ws])
+			translate([0, y, fork_hals_d / 2])
+				cube([holder_l, ws, uff_h]);
+		for (y  = [0, holder_w - holder_cube_breit])
+		{
+			dick = holder_l / 4 + .5;
+			hoch = mounting_height-2.8;
+			block_x = holder_l - 4*ws;
+			difference()
+			{
+				translate([block_x/2 - 1.5*ws, y, -hoch])
+					cube([block_x , holder_cube_breit, mounting_height + uff_h - .05]);
+				translate([holder_l/2 - dick/2, y, -hoch ])
+					cube([dick, holder_cube_breit, hoch]);
+			}
+		}
+	}
+	/*
+	difference() {
+		hull() {
+			intersection() {
+				scale([1, 1.1, 1.1]) translated_fork();
+				translate([(fork_hals_l-holder_l)/2, -holder_w/2, mounting_height+slot_h/2]) {
+					cube([holder_l, holder_w, 2*mounting_height]);
+				}
+			}
+			translate([(fork_hals_l-holder_l)/2, -holder_w/2, mounting_height+slot_h/2])
+				cube([holder_l, holder_w, ws]);
+		}
+		translated_fork();
+		// screws
+		main_holder_screws(bite = false);
+	}
+	*/
+}
+
+if(show == "all" || show == "base")
+{
+	main_holder();
 }
 
 // deckel main holder
-if(show == "all" || show == "top") difference() {
-	hull() {
-		intersection() {
-			scale([1, 1.1, 1.1]) translated_fork();
-			translate([(fork_hals_l-holder_l)/2, -holder_w/2, mounting_height+slot_h/2]) {
-				cube([holder_l, holder_w, 2*mounting_height]);
-			}
-		}
-		translate([(fork_hals_l-holder_l)/2, -holder_w/2, mounting_height+slot_h/2])
-			cube([holder_l, holder_w, ws]);
-	}
-	translated_fork();
-	// screws
-	main_holder_screws(bite = false);
-}
+if(show == "all" || show == "top")
+	deckel_main_holder();
 
 // spule und magnet
 sp_holder_l = spule.x + 2*ws;
@@ -165,21 +290,32 @@ if(show == "all" || show == "bottom") difference() {
 
 // connector arms
 conn_h = 2*ws;
-if(show == "all" || show == "base") for(side = [0, 1]) {
-	mirror([0,side, 0]) difference() {
-		hull() {
-			// short spule
-			translate([fork_l-sp_holder_l+ws,start_holder_outside_y ,0]) {
-				cube([1,sp_holder_w - sp_holder_w_clearance,conn_h]);
+if(show == "all" || show == "base")
+{
+	for(side = [0, 1]) {
+		mirror([0,side, 0])
+		{
+			difference() {
+				hull() {
+					// short spule
+					translate([fork_l-sp_holder_l+ws,start_holder_outside_y ,0]) {
+						cube([1,sp_holder_w - sp_holder_w_clearance,conn_h]);
+					}
+					translate([holder_anfang,0,0])
+						cube([1, holder_w/2, conn_h]);
+				}
+				translate([fork_l-sp_holder_l-screw_head.x, (fork_abstand+sp_holder_w)/2, conn_h])
+					screw(bite = false);
+				magic_offs = [1.5, .5];	// To make it align to the raster of my platine
+				translate([fork_hals_l-screw_head.x+magic_offs.x, fork_abstand/2+magic_offs.y, conn_h])
+					screw(bite = false);
+				main_holder_screws();
+				for (x = [0, holder_l - spring_d, /*additional to get support out */ holder_l - 2*spring_d])
+				{
+					translate([holder_anfang-0.5 + x, -holder_w/2, ws])
+						cube([spring_d + 1, holder_w, ws]);
+				}
 			}
-			translate([holder_l,0,0])
-				cube([1, holder_w/2, conn_h]);
 		}
-		translate([fork_l-sp_holder_l-screw_head.x, (fork_abstand+sp_holder_w)/2, conn_h])
-			screw(bite = false);
-		magic_offs = [1.5, .5];	// To make it align to the raster of my platine
-		translate([fork_hals_l-screw_head.x+magic_offs.x, fork_abstand/2+magic_offs.y, conn_h])
-			screw(bite = false);
-		main_holder_screws();
 	}
 }
