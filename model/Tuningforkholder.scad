@@ -1,7 +1,7 @@
 fork_abstand = 17;
 fork_l = 123;
 fork_arm_d = 5;
-fork_hals_d = 5.5+.25;
+fork_hals_d = 5.5;
 fork_hals_l = 40;
 fork_hals_sphere = 9;
 magnet = [12+.3,4.6+.3];
@@ -90,6 +90,7 @@ module main_holder_screws(bite = true) {
 	}
 }
 
+spring_extra_dran = .25;
 spring_d = 1;
 module spring(mit_fuss = true)
 {
@@ -115,7 +116,7 @@ module spring(mit_fuss = true)
 				circle(r, $fn = 50);
 				translate([0, -(r+1)])
 					square([r, (r*2)+1]);
-				circle(fork_hals_d/2, $fn = 50);
+				circle((fork_hals_d-spring_extra_dran)/2, $fn = 50);
 			}
 		}
 	}
