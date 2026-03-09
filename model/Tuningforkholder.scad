@@ -7,11 +7,13 @@ fork_hals_sphere = 9;
 magnet = [12+.3,4.6+.3];
 spule = [10.2, 9.5, 14];
 
-screw_d = 3;
-screw_head = [5.5, 0, 3];
+screw_d = 2.1;
+screw_head = [5.5, 0, 2];
 ws = 1.4;
 slot_h = 1;
 mounting_height = magnet.x/2 + ws;
+conn_h = 2*ws;
+main_holder_extra_slit = .33;
 
 show = "all";	//all, base, top, bottom
 
@@ -63,10 +65,10 @@ module spule_array() {
 }
 
 module screw(bite = true, l = 15, headsunk = false) {
-	$fn = $preview ? 10 : 30;
-	d = bite ? screw_d - .75 : screw_d;
+	$fn = $preview ? 16 : 80;
+	d = bite ? screw_d - .25 : screw_d + .25;
 	translate([0,0,-(l-.01)])cylinder(d = d, h = l);
-	cylinder(d = screw_head.x, h = screw_head.z + (headsunk ? l : 0));
+	cylinder(d1 = d, d2 = screw_head.x, h = screw_head.z + (headsunk ? l : 0));
 	
 }
 
@@ -75,12 +77,14 @@ module screw(bite = true, l = 15, headsunk = false) {
 %translated_fork();
 
 holder_w = fork_hals_d * 4;
-holder_l = (fork_hals_l-fork_hals_sphere)/2;
+holder_l = fork_hals_l / 2; //(fork_hals_l-fork_hals_sphere)/2;
+holder_anfang = fork_hals_sphere - 1;	// correction factor for where the spring holder actually would push against sphere
+holder_cube_breit = holder_w/2 - fork_hals_d;
 
 module main_holder_screws(bite = true) {
 	for(x = [holder_l / 2] /*[holder_l/5, 4*holder_l/5]*/) {
 		for(y = [-((holder_w - screw_head.x)/2), ((holder_w - screw_head.x)/2)]) {
-			translate([(fork_hals_l-holder_l)/2+x, y, mounting_height+2*ws + fork_hals_d/2])
+			translate([holder_anfang + x, y, mounting_height+2*ws + fork_hals_d/2 - screw_head.z])
 				screw(bite = bite);
 		}
 	}
@@ -123,8 +127,6 @@ module spring(mit_fuss = true)
 //}
 
 // main holder
-holder_anfang = (fork_hals_l-holder_l)/2;	// but whi?
-holder_cube_breit = holder_w/2 - fork_hals_d;
 module main_holder()
 {
 	difference() {
@@ -132,6 +134,12 @@ module main_holder()
 		{
 			// main plate
 			cube([holder_l, holder_w, ws]);
+			// side verstärkungen
+			for (y  = [0, holder_w - ws])
+			{
+				translate([0, y, 0])
+					cube([holder_l, ws, conn_h]);
+			}
 			// thing for screws and that keeps deckel somewhat in place (x)
 			for (y  = [0, holder_w - holder_cube_breit])
 			{
@@ -140,11 +148,17 @@ module main_holder()
 					cube([dick, holder_cube_breit, mounting_height]);
 			}
 			// thing that keeps deckel somewhat in place (y)
+			block_x = holder_l - 4*ws;
 			for (y  = [holder_cube_breit, (holder_w - holder_cube_breit) - ws])
 			{
-				block_x = holder_l - 4*ws;
 				translate([(holder_l - block_x)/2, y, ws])
-					cube([block_x, ws, ws+ws]);// need to be higher than the connector arms
+					cube([block_x, ws, conn_h]);// need to be higher than the connector arms
+			}
+			// sockel oder so
+			for (y  = [0, holder_w - block_x/2])
+			{
+				translate([(holder_l - block_x)/2, y, ws])
+					cube([block_x, holder_cube_breit, ws]);
 			}
 			// spring parts
 			for (x = [0, holder_l - spring_d])
@@ -158,7 +172,7 @@ module main_holder()
 		
 		}
 		#translated_fork();
-		#main_holder_screws();
+		main_holder_screws();
 		
 	}
 }
@@ -184,15 +198,15 @@ module deckel_main_holder()
 					cube([holder_l, ws, uff_h]);
 			for (y  = [0, holder_w - holder_cube_breit])
 			{
-				dick = holder_l / 4 + .5;
-				hoch = mounting_height-2.8;
+				dick = holder_l / 4 + 2*main_holder_extra_slit;
+				hoch = mounting_height-2.8 - main_holder_extra_slit;
 				block_x = holder_l - 4*ws;
 				difference()
 				{
-					translate([block_x/2 - 1.5*ws, y, -hoch])
-						cube([block_x , holder_cube_breit, mounting_height + uff_h - .05]);
+					translate([(holder_l -block_x) / 2, y, -hoch])
+						cube([block_x , holder_cube_breit, mounting_height + uff_h + .1 - main_holder_extra_slit]);
 					translate([holder_l/2 - dick/2, y, -hoch ])
-						cube([dick, holder_cube_breit, hoch]);
+						cube([dick, holder_cube_breit, hoch+ 1.5 *main_holder_extra_slit]);	// 1.5 to have some slack with the screw.
 				}
 			}
 		}
@@ -263,7 +277,6 @@ if(show == "all" || show == "bottom") difference() {
 }
 
 // connector arms
-conn_h = 2*ws;
 if(show == "all" || show == "base")
 {
 	for(side = [0, 1]) {
@@ -275,7 +288,7 @@ if(show == "all" || show == "base")
 					translate([fork_l-sp_holder_l+ws,start_holder_outside_y ,0]) {
 						cube([1,sp_holder_w - sp_holder_w_clearance,conn_h]);
 					}
-					translate([holder_anfang,0,0])
+					translate([holder_anfang + holder_l,0,0])
 						cube([1, holder_w/2, conn_h]);
 				}
 				translate([fork_l-sp_holder_l-screw_head.x, (fork_abstand+sp_holder_w)/2, conn_h])
