@@ -1,11 +1,10 @@
 #pragma once
 
 #include "absolute_time.hpp"
-#include "reference_tick.hpp"
 #include "display.hpp"    // a little bit ugly from SW design perspective
 
+#include <algorithm>
 #include <string_view>
-#include <limits>
 #include <cmath>
 #include <cstdio>
 #include <optional>
@@ -183,7 +182,8 @@ public:
 
 private:
     size_t mPointer{0};
-    std::array<char, 11+1> mStringBuffer;
+    // Worst Case: Needs to hold "NZST-12:00:00NZDT-13:00:00,M9.5.0,M4.1.0/3"
+    std::array<char, 42> mStringBuffer;
 };
 
 // ----------------------------------------------------------
@@ -234,17 +234,22 @@ public:
             const auto [timezone_identifier, len] = mTzParser.get();
             if (len > 0)
             {
-
                 maybeMsg = string("Setting timezone '%s', ", timezone_identifier);
+                // The rules for knowing the offsets for the TZ are usually located in
+                // /usr/share/zoneinfo/posixrules.
+                // (see https://www.man7.org/linux/man-pages/man3/tzset.3.html)
+                // Our ARM target does not have these files and it seems like they implemented the logic otherwise.
+                // So: Format for full info like NZST-12:00:00NZDT-13:00:00,M9.5.0,M4.1.0/3"
                 setenv("TZ", timezone_identifier, 1);
                 // I currently don't know a way to check for success / correct timezone
                 tzset();
+                maybeMsg = stringAppend("%s DST: %s tz: %ld, is_dl: %d", _tzname[0], _tzname[1], _timezone, _daylight);
             }
             const auto maybeParsedTime_ms = mTimeParser.parseBuffer();
             if (maybeParsedTime_ms)
             {
                 // OK is the magic ACK value for the settime.py script
-                maybeMsg = string("Applying timestamp %llu: OK\r\n", *maybeParsedTime_ms);
+                maybeMsg = stringAppend("Applying timestamp %llu: OK\r\n", *maybeParsedTime_ms);
                 if (maybeDisplay)
                 {
                     maybeDisplay->get().showInfo("Set Time", {.end_wait_us = 200'000});
@@ -254,7 +259,7 @@ public:
             }
             else
             {
-                maybeMsg = string("Could not parse timestamp: %.*s\r\n",
+                maybeMsg = stringAppend("Could not parse timestamp: %.*s\r\n",
                         maybeParsedTime_ms.error().size(),
                         maybeParsedTime_ms.error().data());
             }
@@ -303,9 +308,11 @@ private:
 
     template<class...Args>
     std::optional<const char*>
-    string(const char* format, Args&&...args)
+    stringAppend(const char* format, Args&&...args)
     {
-        const int chars = std::snprintf(mPrintBuffer.begin(), mPrintBuffer.size(), format, std::forward<Args>(args)...);
+        const auto begin = std::find(mPrintBuffer.begin(), mPrintBuffer.end(), '\0');
+        const size_t remaining = mPrintBuffer.end() - begin;
+        const int chars = std::snprintf(begin, remaining, format, std::forward<Args>(args)...);
         if (chars > 0)
         {
             return mPrintBuffer.begin();
@@ -315,6 +322,14 @@ private:
         {
             return std::nullopt;
         }
+    }
+
+    template<class...Args>
+    std::optional<const char*>
+    string(const char* format, Args&&...args)
+    {
+        mPrintBuffer[0] = 0;
+        return stringAppend(format, std::forward<Args>(args)...);
     }
 
     ParseState mState;
