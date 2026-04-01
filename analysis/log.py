@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/bin/env python
 import sqlite3
 import serial
 from datetime import datetime, timedelta
@@ -7,10 +7,10 @@ import data
 
 
 # TODO: Make parameter
-devicePath = '/dev/ttyACM0'
+devicePath = '/dev/serial/by-id/usb-FTDI_FT232R_USB_UART_A50285BI-if00-port0'
 stringcode = 'ascii'
 
-device = serial.Serial(devicePath, timeout=1)  # don't care for baudrate, is USB currently
+device = serial.Serial(devicePath, baudrate=230400, timeout=1)
 assert(device.is_open)
 
 db_file_name = datetime.today().strftime('%Y-%m-%d_%H-%M-%S') + "_sensor_log.db"

@@ -34,14 +34,17 @@ def getTzString():
     def getTZStringFromLocation(loc):
         zones = zoneinfo.available_timezones()
         if loc not in zones:
-             raise f"'{loc}' not in available timezones ({zones})"
+             raise RuntimeError(f"'{loc}' not in available timezones ({zones})")
         # path to IANA tz db on your system, adjust if needed
         basepath = Path("/usr/share/zoneinfo/")
         with open(basepath / loc, "rb") as fobj:
             content = fobj.readlines()
             return content[-1].decode("ASCII").strip("\n")
 
-    return getTZStringFromLocation(datetime.now(timezone.utc).astimezone().tzinfo.tzname(None))
+    with open('/etc/timezone') as f:
+        local_timezone = f.readline().strip()
+        print (f"Using zoneinfo for local TZ '{local_timezone}'")
+        return getTZStringFromLocation(local_timezone)
 
 parser.add_argument('serial_port')
 parser.add_argument('--baudrate', default=230400)
