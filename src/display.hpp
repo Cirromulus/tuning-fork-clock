@@ -216,22 +216,26 @@ private:
     DisplayState
     getNextTransition() const
     {
-        // Currently no fancy state machine.
+        // the period in which this sequence is re-played.
+        static constexpr unsigned timeWindow {25};
+
+        // Currently no fancy state machine. Could be done more beautifully.
+
         const unsigned tempEndSecondToShow = mTemperature.has_value() ? 1 : 0;
-        if (mElapsedSinceBoot_s % 10 < tempEndSecondToShow)
+        if (mElapsedSinceBoot_s % timeWindow < tempEndSecondToShow)
         {
             return DisplayState::temperature;
         }
 
         const unsigned driftEndSecondToShow = tempEndSecondToShow + (mDrift_ms.has_value() ? 1 : 0);
-        if (mElapsedSinceBoot_s % 10 < driftEndSecondToShow)
+        if (mElapsedSinceBoot_s % timeWindow < driftEndSecondToShow)
         {
             return DisplayState::drift;
         }
 
         if (mAbsoluteTime_s)
         {
-            if (mElapsedSinceBoot_s % 10 > 8)
+            if (mElapsedSinceBoot_s % timeWindow > driftEndSecondToShow + 5)
             {
                 return DisplayState::absoluteTime_calendar;
             }
