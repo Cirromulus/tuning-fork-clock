@@ -27,8 +27,12 @@ print (f"Writing into '{db_file_name}'")
 first_estimate_diff = None
 try:
     while (device.is_open):
-        line = device.readline().decode(stringcode).rstrip()
-        # print (line)
+        try:
+            line = device.readline().decode(stringcode).rstrip()
+        except UnicodeDecodeError as e:
+            print (e, line)
+            continue
+
         elements = line.split(',')
 
         if len(elements) == 0:
