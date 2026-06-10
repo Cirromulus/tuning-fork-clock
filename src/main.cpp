@@ -270,12 +270,19 @@ main()
             // ------ The Interesting Thing ------
             const double delta = timeEstimator.consumeNextMeasurement(lastEnvironmentSample->temperature_centidegree);
             time.increaseDelta_us(delta);
-            const DiffTime currentDriftSinceBoot_us =
-                externalClockSource.getTimeSinceReferenceStable_us()
-                        .value_or(clocksource::Internal::getTimeSinceReferenceStable_us())
-                        - time.getElapsedTimeSinceBoot_us();
             // -----------------------------------
 
+            // FIXME: The calculation for the "TimeSinceReferenceStable" of the external clock source
+            // is slightly wrong because:
+            //  1. It is not necessarily since boot
+            //  2. It does not account for gaps in external clock (which also leads to 1.)
+            // So this just uses the internal drifting source for a rough estimation of an error.
+            // It is only for the looks anyway.
+            const DiffTime currentDriftSinceBoot_us =
+                // externalClockSource.getTimeSinceReferenceStable_us()
+                        // .value_or(clocksource::Internal::getTimeSinceReferenceStable_us())
+                        clocksource::Internal::getTimeSinceReferenceStable_us()
+                        - time.getElapsedTimeSinceBoot_us();
 
             // --- print current time to screen ---
             display.setElapsedTimeSinceBoot_us(time.getElapsedTimeSinceBoot_us());

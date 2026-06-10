@@ -45,7 +45,7 @@ print (f"Writing results to {output_file}")
 # print (dataframe.cov())
 # print ()
 
-# TODO: THis is useful for only plotting, but we also calculate.
+# TODO: This is useful for only plotting, but we also calculate.
 # TODO Split.
 # columns = {}
 # for colname, desc in data.TABLE_FORMAT.items():

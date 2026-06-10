@@ -9,8 +9,6 @@ namespace clocksource
 AbsTime
 Internal::getCurrentReferenceTicks()
 {
-    // Currently, only internal clack is a reference.
-    // TODO: Make PIO counter for external reference
     return time_us_64();
 }
 
