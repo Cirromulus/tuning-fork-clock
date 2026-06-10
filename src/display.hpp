@@ -46,7 +46,7 @@ public:
     showError(std::string_view const& str)
     {
         printf("Error: %.*s\n", str.length(), str.data());
-        mDriver.write_string_running(str, {.per_char_wait_us = 75'000, .end_wait_us = 500'000, .blink = true});
+        mDriver.write_string_running(str, {.per_char_wait_us = 70'000, .end_wait_us = 250'000, .blink = true});
     }
 
     void

@@ -316,7 +316,7 @@ private:
         if (val >= 0)
             return "Not enough bytes received";
         if (val == PICO_ERROR_GENERIC)
-            return "address not acknowledged or no device present";
+            return "no device present?";
         if (val == PICO_ERROR_TIMEOUT)
             return "a timeout occurred";
         else
