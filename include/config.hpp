@@ -77,33 +77,33 @@ static_assert(std::numeric_limits<OscCount>::max() > expectedMaxCycleTime);
 
 /*
  * The last run of ./analysis/estimate.py:
-Estimation for 2026-03-25_17-38-19_sensor_log.db (590716.836208 seconds)
-Damp factor: 0.002856778013308309
+Estimation for logs/2026-04-01_17-35-11_sensor_log-pruned.db (4710088.388931 seconds)
+Damp factor: 0.002130548230547027
 Factors for damped period estimation:
-9.887082152331292164e+05
-7.322207202530656156e-01
-1.125779944269199491e-04
+9.880565853222419973e+05
+1.254149979679611615e+00
+7.671359632002468294e-06
 Factors for period error estimation based on temp gradient:
-2.466219860125603569e-01
--4.351535722567403397e-01
--1.205844222990069652e-02
+2.663839631317995171e-01
+-2.342039460984990384e-01
+-3.829544454488955849e-03
  */
 
 // The following values are taken from plot.py calculations. DIY if you want to change that.
 static constexpr std::array temperatureCalibrationPolynom {
-    9.887082152331292164e+05, // Could be seen as "average"
-    7.322207202530656156e-01, // Can be seen as temperature depencence
-    1.125779944269199491e-04, // "nonlinearity" of temperature dependence
+    9.880565853222419973e+05, // Could be seen as "average"
+    1.254149979679611615e+00, // Can be seen as temperature depencence
+    7.671359632002468294e-06, // "nonlinearity" of temperature dependence
 };
 
 static constexpr std::array tempRateCalibrationPolynom {
-    2.466219860125603569e-01, // this is a bit pointless? Its a constant error.
-    -4.351535722567403397e-01,
-    -1.205844222990069652e-02
+    2.663839631317995171e-01, // this is a bit pointless? Its a constant error.
+    -2.342039460984990384e-01,
+    -3.829544454488955849e-03
 };
 
 // This is not calibrated against an actual time difference,
 // but instead was "trained" on the average sample time.
-static constexpr double dampFactor {0.002856778013308309};
+static constexpr double dampFactor {0.002130548230547027};
 
 } // namespace config
