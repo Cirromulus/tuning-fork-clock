@@ -172,7 +172,7 @@ public:
                     }
                     static constexpr char deltaChar = 0x07;
                     // overwrite last char with delta sign
-                    mDriver.write_builtin_char(7, deltaChar, true);
+                    mDriver.write_builtin_char(7, deltaChar);
                 }
                 else
                 {
@@ -235,7 +235,7 @@ private:
 
         if (mAbsoluteTime_s)
         {
-            if (mElapsedSinceBoot_s % timeWindow > driftEndSecondToShow + 5)
+            if (mElapsedSinceBoot_s % timeWindow < driftEndSecondToShow + 3)
             {
                 return DisplayState::absoluteTime_calendar;
             }
