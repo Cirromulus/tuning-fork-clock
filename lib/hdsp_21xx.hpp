@@ -270,12 +270,14 @@ public:
       }
       else
       {
+        // this will cut all possibly overflowing chars
         write_string_oneshot(str, {.blink = options.blink});
         sleep_us(options.initial_wait_us);
       }
 
+      // write possibly remaining chars
       size_t pointer = 1;
-      for (; pointer + num_characters < str.size(); pointer++)
+      for (; pointer + num_characters <= str.size(); pointer++)
       {
         write_string_oneshot(str.substr(pointer, num_characters));
         sleep_us(options.per_char_wait_us);
