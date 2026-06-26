@@ -24,7 +24,7 @@ struct I2cConfig
     unsigned sda;
     unsigned scl;
     i2c_inst_t* i2c_inst;
-    uint32_t desiredBaudrate = 300'000;
+    uint32_t desiredBaudrate = 350'000;
 };
 
 struct UartConfig
@@ -53,7 +53,7 @@ static constexpr AbsTime referenceClockFrequency = 1'000'000;  // counts per sec
 // should be big enough for allowing I2C measuring traffic.
 // This is translatable via `fifoSize * periodsPerMeasurement / expectedOscFreq`
 // = number of seconds until fifo is full
-static constexpr size_t fifoSize = 16;
+static constexpr size_t fifoSize = 32;
 
 
 static constexpr double expectedOscFreq = 440;

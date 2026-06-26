@@ -23,6 +23,8 @@ class BME280
     static constexpr size_t timeout_ms = 100;
 
 public:
+    using MaybeError = std::expected<void, std::string_view>;
+
     struct EnvironmentMeasurement
     {
         int32_t temperature_centidegree;    // * .01 Celsius
@@ -55,12 +57,19 @@ public:
     {
     }
 
-    bool init()
+    MaybeError
+    init()
     {
+        using namespace std;
         const auto chipId = readReg<uint8_t>(BME280_REGISTER_CHIPID);
-        if (!chipId || *chipId != deviceChipId)
+        if (!chipId)
         {
-            return false;
+            return unexpected("Could not read chip id. Not connected?");
+        }
+        if (*chipId != deviceChipId)
+        {
+            // TODO: Write chip ID in internal buffer
+            return unexpected("BME Error: Wrong chip id");
         }
 
           // if chip is still reading calibration, delay
@@ -132,18 +141,25 @@ public:
     }
 
 private:
-    bool
+    MaybeError
     startSampling(/* TODO: Parameters*/)
     {
+        using namespace std;
+
         // making sure sensor is in sleep mode before setting configuration
         // as it otherwise may be ignored
-        write8(BME280_REGISTER_CONTROL, MODE_SLEEP);
-
+        if (not write8(BME280_REGISTER_CONTROL, MODE_SLEEP))
+        {
+            return unexpected("sleep mode");
+        }
 
         {
             ctrl_hum hum;
             hum.osrs_h = SAMPLING_X16;
-            write8(BME280_REGISTER_CONTROLHUMID, hum.get());
+            if (not write8(BME280_REGISTER_CONTROLHUMID, hum.get()))
+            {
+                return unexpected("set humid samplerate");
+            }
         }
 
         {
@@ -151,7 +167,10 @@ private:
             conf.filter = FILTER_X2;
             conf.t_sb = STANDBY_MS_1000;
             conf.spi3w_en = 0;
-            write8(BME280_REGISTER_CONFIG, conf.get());
+            if (not write8(BME280_REGISTER_CONFIG, conf.get()))
+            {
+                return unexpected("set filter");
+            }
         }
 
         {
@@ -162,10 +181,12 @@ private:
             // you must make sure to also set REGISTER_CONTROL after setting the
             // CONTROLHUMID register, otherwise the values won't be applied
             // (see DS 5.4.3)
-            write8(BME280_REGISTER_CONTROL, meas.get());
+            if (not write8(BME280_REGISTER_CONTROL, meas.get()))
+            {
+                return unexpected("set temp/pressure samplerate");
+            }
         }
-
-        return true;
+        return {};
     }
 
     /*!

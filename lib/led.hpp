@@ -38,8 +38,6 @@ public:
 
 class Status
 {
-    WS2812LED& led;
-    uint8_t brightness;
 public:
     Status(WS2812LED& led, uint8_t brightness = 0x20)
         : led{led}, brightness{brightness}
@@ -48,32 +46,35 @@ public:
     }
 
     void
-    expectedFrequency(bool hasExternalOscillator)
+    expectedFrequency(bool hasExternalOscillator) const
     {
         led.put_pixel(hasExternalOscillator ? 0 : brightness / 3, brightness, 0);
     }
 
     void
-    tooHighFrequency()
+    tooHighFrequency() const
     {
         led.put_pixel(0, brightness/2, brightness);
     }
 
     void
-    tooLowFrequency()
+    tooLowFrequency() const
     {
         led.put_pixel(brightness, brightness/2, 0);
     }
 
     void
-    invalidTempReading()
+    invalidTempReading() const
     {
         led.put_pixel(brightness/2, brightness, 0);
     }
 
     void
-    noSignal()
+    noSignal() const
     {
         led.put_pixel(brightness, 0, brightness / 2);
     }
+private:
+    WS2812LED& led;
+    uint8_t brightness;
 };

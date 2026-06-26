@@ -41,7 +41,7 @@ setupI2C(const I2cConfig& config)
     gpio_pull_up(config.scl);
     if (actualBaudrate != config.desiredBaudrate)
     {
-        printf("i2c_init failed to reach baudrate of %u, got instead %u\n",
+        printf("i2c_init failed to reach exact baudrate of %u, got instead %u\n",
                config.desiredBaudrate, actualBaudrate);
     }
 

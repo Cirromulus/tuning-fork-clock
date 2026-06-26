@@ -124,10 +124,12 @@ main()
     AbsoluteTimeManager time{};
     CommandParser commandParser{time, display};
 
-    while (!bme.init())
+    for (BME280::MaybeError maybeSuccess{}; maybeSuccess = bme.init(); not maybeSuccess.has_value())
     {
-        printf("Could not init BME280.\n");
+        const auto& error = maybeSuccess.error();
+        printf("Could not init BME280: %.*s", static_cast<int>(error.length()), error.data());
         display.showError("Could not init BME280");
+        display.showError(error);
     }
 
     // negative timeout means exact delay (rather than delay between callbacks)
@@ -204,7 +206,6 @@ main()
         // Set status "default", will be overwritten later if something errorred
         status.expectedFrequency(forkMeasurement.externalReference.has_value());
 
-
         if (shouldSampleEnvironment)
         {
             // somewhen the timer fired
@@ -221,7 +222,6 @@ main()
                 printf("Temp: %.*s\n",
                     static_cast<int>(maybeCurrentEnv.error().length()),
                     maybeCurrentEnv.error().data());
-                display.showError("Err Temp");
                 display.showError(maybeCurrentEnv.error());
                 status.invalidTempReading();
                 // (only) on timeout, we expect a stuck I2C bus, but we'll do it always.
@@ -229,8 +229,16 @@ main()
                 printf("Tried to recover I2c bus.\n");
                 // This will re-set the read request.
                 // (only) necessary on "got default value", but we'll do it anyways.
-                bme.init();
-                printf("Inited BME\n");
+                const auto maybeSuccess = bme.init();
+                if (maybeSuccess)
+                {
+                    printf("Inited BME\n");
+                }
+                else
+                {
+                    const auto& err = maybeSuccess.error();
+                    printf("BME init fail: %.*s\n", static_cast<int>(err.length()), err.data());
+                }
             }
         }
 
@@ -375,7 +383,8 @@ bool
 env_sample_callback(repeating_timer_t*)
 {
     // as simple as it gets. Is not realtime-critical.
-    shouldSampleEnvironment = true;
+    // Also: using unsafe because this is just a rough congestion control not to loose samples.
+    shouldSampleEnvironment = queue_get_level_unsafe(&period_fifo) < (config::fifoSize / 2);
     return true; // keep repeating
 }
 
@@ -390,7 +399,6 @@ jump_start_fork(uint16_t duration_ms)
     static_assert(period_us - (halfPeriod_us * 2) < config::expectedDeviation / 2, "Too much out of tune!");
 
     const OscCount periodsToStimulate = (duration_ms * 1000) / period_us;
-
 
     // instead of rounding up, loop always one more time than requested (hehe)
     for (OscCount i = 0; i <= periodsToStimulate; i++)
