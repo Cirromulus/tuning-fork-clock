@@ -124,10 +124,10 @@ main()
     AbsoluteTimeManager time{};
     CommandParser commandParser{time, display};
 
-    for (BME280::MaybeError maybeSuccess{}; maybeSuccess = bme.init(); not maybeSuccess.has_value())
+    for (BME280::MaybeError maybeSuccess = bme.init(); not maybeSuccess.has_value(); maybeSuccess = bme.init())
     {
         const auto& error = maybeSuccess.error();
-        printf("Could not init BME280: %.*s", static_cast<int>(error.length()), error.data());
+        printf("Could not init BME280: %.*s\n", static_cast<int>(error.length()), error.data());
         display.showError("Could not init BME280");
         display.showError(error);
     }
@@ -208,7 +208,7 @@ main()
 
         if (shouldSampleEnvironment)
         {
-            // somewhen the timer fired
+            // somewhen, the timer fired
             const auto maybeCurrentEnv = bme.readEnvironment();
             if (maybeCurrentEnv)
             {
@@ -217,11 +217,6 @@ main()
             }
             else
             {
-                // FIXME: Sometimes, when I2C transmission somehow failed,
-                // This is repeatedly shown.
-                printf("Temp: %.*s\n",
-                    static_cast<int>(maybeCurrentEnv.error().length()),
-                    maybeCurrentEnv.error().data());
                 display.showError(maybeCurrentEnv.error());
                 status.invalidTempReading();
                 // (only) on timeout, we expect a stuck I2C bus, but we'll do it always.
@@ -261,13 +256,11 @@ main()
         }
         else if (!lastEnvironmentSample)
         {
+            const auto& err = lastEnvironmentSample.error();
             // we never had a valid reading
             status.invalidTempReading();
             display.showError("No Temp Yet");
-            display.showError(lastEnvironmentSample.error());
-            printf("Temp: %.*s\n",
-                    static_cast<int>(lastEnvironmentSample.error().length()),
-                    lastEnvironmentSample.error().data());
+            display.showError(err);
             continue;
         }
 

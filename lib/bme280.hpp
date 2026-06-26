@@ -64,7 +64,7 @@ public:
         const auto chipId = readReg<uint8_t>(BME280_REGISTER_CHIPID);
         if (!chipId)
         {
-            return unexpected("Could not read chip id. Not connected?");
+            return unexpected("Could not read chip id");
         }
         if (*chipId != deviceChipId)
         {
@@ -72,9 +72,16 @@ public:
             return unexpected("BME Error: Wrong chip id");
         }
 
-          // if chip is still reading calibration, delay
-        while (isReadingCalibration())
+        // if chip is still reading calibration, delay
+        static constexpr size_t maxWait = 10;
+        for (size_t i = 0; isReadingCalibration(); i++)
+        {
+            if (i >= maxWait)
+            {
+                return unexpected("BME Error: calibration read timeout");
+            }
             sleep_ms(10);
+        }
 
         readCoefficients();
 
